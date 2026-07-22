@@ -1,0 +1,60 @@
+{
+  "settings": {
+    "number_of_shards": 3,
+    "number_of_replicas": 0,
+    "refresh_interval": "-1"
+  },
+  "mappings": {
+    "_doc": {
+      "properties": {
+        "id":            { "type": "keyword" },
+        "sku":           { "type": "keyword" },
+        "title":         { "type": "text" },
+        "description":   { "type": "text" },
+        "category":      { "type": "keyword" },
+        "sub_category":  { "type": "keyword" },
+        "brand":         { "type": "keyword" },
+        "status":        { "type": "keyword" },
+        "country_code":  { "type": "keyword" },
+        "currency":      { "type": "keyword" },
+        "tags":          { "type": "keyword" },
+        "price":         { "type": "double" },
+        "discount":      { "type": "float" },
+        "rating":        { "type": "float" },
+        "views":         { "type": "long" },
+        "stock":         { "type": "integer" },
+        "sold_count":    { "type": "long" },
+        "weight_kg":     { "type": "float" },
+        "width_cm":      { "type": "float" },
+        "height_cm":     { "type": "float" },
+        "depth_cm":      { "type": "float" },
+        "is_active":     { "type": "boolean" },
+        "is_featured":   { "type": "boolean" },
+        "in_stock":      { "type": "boolean" },
+        "created_at":    { "type": "date" },
+        "updated_at":    { "type": "date" },
+        "published_at":  { "type": "date" },
+        "client_ip":     { "type": "ip" },
+        "location":      { "type": "geo_point" },
+        "seller_id":     { "type": "keyword" },
+        "seller_name":   { "type": "text" },
+        "warehouse_code":{ "type": "keyword" },
+        "supplier_id":   { "type": "keyword" },
+        "barcode":       { "type": "keyword" },
+        "color":         { "type": "keyword" },
+        "size":          { "type": "keyword" },
+        "material":      { "type": "keyword" },
+        "rank":          { "type": "integer" },
+        "score":         { "type": "double" },
+        "reviews": {
+          "type": "nested",
+          "properties": {
+            "author":  { "type": "keyword" },
+            "rating":  { "type": "integer" },
+            "comment": { "type": "text" }
+          }
+        }
+      }
+    }
+  }
+}

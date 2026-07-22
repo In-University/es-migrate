@@ -1,0 +1,52 @@
+# Values for the official elastic/logstash Helm chart, used only for the
+# one-shot ES9 -> ES6 rollback delta sync. Connection details (hosts,
+# credentials, cutover marker) are NOT in this file -- scripts/rollback_sync.sh
+# passes them straight into the release as literal `extraEnvs` entries via
+# `helm --set-string` at install time (there's no secret-manager infra in
+# this project to justify a Kubernetes Secret in between; see the script for
+# what actually gets set).
+#
+# NOTE on "one-shot": the chart deploys Logstash as a StatefulSet, and
+# Kubernetes requires restartPolicy=Always for StatefulSet pods, so it can't
+# express "run once and stay stopped" natively. The pipeline (see
+# pipeline/rollback.conf) has no `schedule` on its elasticsearch input, so it
+# drains all matching documents once and the Logstash process exits — after
+# which Kubernetes restarts the container and it harmlessly re-runs the same
+# (idempotent, upsert-by-id) query. Watch the logs for the pipeline
+# completing, verify counts, then `helm uninstall` — don't wait for the pod
+# to reach a steady "done" state on its own.
+
+replicas: 1
+
+# Memory limit must clear the JVM heap (LS_JAVA_OPTS defaults to -Xmx1g
+# -Xms1g -- not overridden here) by a comfortable margin for non-heap usage
+# (metaspace, thread stacks, direct buffers), or the container gets
+# OOMKilled by the cgroup even though the JVM itself thinks it's fine. The
+# chart's own default pairs a 1g heap with a 1536Mi limit for this reason;
+# match that rather than trying to shrink it further -- a tighter limit was
+# tried (1Gi, then manually down to 200Mi to fit an e2-small node) and both
+# OOMKilled immediately. Use a node with enough headroom (see machine_type
+# in variables.tf) instead of squeezing this below the chart's own minimum.
+resources:
+  requests:
+    cpu: "500m"
+    memory: "1Gi"
+  limits:
+    cpu: "1"
+    memory: "1536Mi"
+
+volumeClaimTemplate:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 2Gi
+
+logstashConfig:
+  logstash.yml: |
+    http.host: 0.0.0.0
+    xpack.monitoring.enabled: false
+    config.reload.automatic: false
+
+# extraEnvs (ES6_HOST, ES6_USER, ES6_PASSWORD, ES9_HOST, ES9_USER,
+# ES9_PASSWORD, CUTOVER_AT) is populated entirely via --set-string by
+# scripts/rollback_sync.sh -- intentionally absent here.
