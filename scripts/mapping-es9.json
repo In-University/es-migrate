@@ -2,13 +2,14 @@
   "settings": {
     "number_of_shards": 3,
     "number_of_replicas": 0,
-    "refresh_interval": "-1"
+    "refresh_interval": "-1",
+    "translog": { "durability": "async", "sync_interval": "5s" }
   },
   "mappings": {
     "properties": {
       "id":            { "type": "keyword" },
       "sku":           { "type": "keyword" },
-      "title":         { "type": "text" },
+      "title":         { "type": "text", "fields": { "keyword": { "type": "keyword", "ignore_above": 256 } } },
       "description":   { "type": "text" },
       "category":      { "type": "keyword" },
       "sub_category":  { "type": "keyword" },
@@ -51,6 +52,36 @@
           "author":  { "type": "keyword" },
           "rating":  { "type": "integer" },
           "comment": { "type": "text" }
+        }
+      },
+      "variants": {
+        "type": "nested",
+        "properties": {
+          "sku":        { "type": "keyword" },
+          "color":      { "type": "keyword" },
+          "size":       { "type": "keyword" },
+          "price":      { "type": "double" },
+          "stock":      { "type": "integer" },
+          "is_default": { "type": "boolean" }
+        }
+      },
+      "attributes": { "type": "object" },
+      "shipping": {
+        "type": "object",
+        "properties": {
+          "weight_class":  { "type": "keyword" },
+          "free_shipping": { "type": "boolean" },
+          "handling_days": { "type": "integer" },
+          "regions":       { "type": "keyword" }
+        }
+      },
+      "price_history": {
+        "type": "nested",
+        "properties": {
+          "changed_at": { "type": "date" },
+          "old_price":  { "type": "double" },
+          "new_price":  { "type": "double" },
+          "reason":     { "type": "keyword" }
         }
       }
     }

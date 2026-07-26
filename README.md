@@ -117,6 +117,18 @@ Design details:
 [docs/superpowers/specs/2026-07-21-es9-es6-rollback-design.md](docs/superpowers/specs/2026-07-21-es9-es6-rollback-design.md),
 mapping notes: [docs/MAPPING-DIFFERENCES.md](docs/MAPPING-DIFFERENCES.md).
 
+> **For a real rollback, use `scripts/es_rollback.sh` instead of the manual
+> sequence below.** It runs the same two steps in the right order behind a
+> hard gate (an incomplete delta sync can never reach the delete pass),
+> checkpoints every page so it can resume, journals each document before
+> overwriting or deleting it so `undo` can put ES6 back, and refuses to
+> delete on a truncated id export. Full guide:
+> [docs/ES-ROLLBACK.md](docs/ES-ROLLBACK.md).
+>
+> The `rollback_sync.sh` + `reconcile_deletes.sh` pair below stays as the
+> minimal illustration of the two mechanisms (Logstash delta, id-diff
+> reconciliation) and for exercising the GKE path.
+
 The full loop is cheap to try end-to-end on a handful of documents instead of
 the 8M-doc benchmark set:
 
@@ -183,10 +195,16 @@ terraform/
   main.tf, variables.tf, outputs.tf, startup-*.sh.tpl   2 VMs, firewall, Docker startup scripts
 scripts/
   generate_es6.py, reindex_remote.sh, mapping-es6.json, mapping-es9.json
+  es_rollback.sh            ES9 -> ES6 rollback controller: delta sync, gate,
+                            delete reconciliation, verify, resume, undo (§5)
+                            -- needs jq; see docs/ES-ROLLBACK.md
+  test_es_rollback.sh       tests for the above -- no real cluster needed
+  fake_es.py                test-only: in-memory stand-in for the ES API
   rollback_sync.sh          ES9 -> ES6 create/update delta sync orchestration (§5)
   reconcile_deletes.sh      ES9 -> ES6 delete reconciliation, ID-diff based (§5)
   simulate_es9_mutations.py test-only: create/update/delete activity on ES9 (§5)
 docs/
+  ES-ROLLBACK.md           guide for scripts/es_rollback.sh
   MAPPING-DIFFERENCES.md   ES6 vs ES9 mapping differences
   superpowers/specs/       design docs for the network split and rollback scenario
 ```

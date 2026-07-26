@@ -5,3 +5,7 @@ crash.log
 crash.*.log
 __pycache__/
 *.pyc
+
+# es_rollback.sh run state (checkpoints, journal, id exports) and its tests
+.rollback-state/
+scripts/.testrun/
