@@ -304,6 +304,32 @@ Chỉ qua khi **cả hai** đúng:
 Không qua thì dừng hẳn. `ALLOW_PARTIAL=true` bỏ qua điều kiện thứ hai, và
 khi đó công cụ cảnh báo rõ ràng.
 
+### Quét ID: doc_values thay vì stored fields
+
+`_source: false` **không** làm việc quét ID rẻ đi. `_id` vẫn được lấy trong
+fetch phase từ stored fields — một lượt đọc theo hàng cho mỗi hit. Đo trên
+cluster benchmark, một page 5000 hit:
+
+| | Lạnh | Nóng |
+|---|---|---|
+| `_id` từ stored fields | 0,340 s | 0,163 s |
+| `ID_FIELD` từ doc_values | **0,114 s** | **0,038 s** |
+
+Nhanh hơn 3–4× vì doc_values là cột, đọc tuần tự và thân thiện page cache.
+
+Nhưng đọc sai ID không phải lỗi hiệu năng — pha 3 sẽ so nhầm tập ID và
+**xoá nhầm document**. Nên công cụ không tin, mà chứng minh, hai lớp:
+
+1. **Trước khi quét**, lấy mẫu 100 doc và hỏi *cả* `_id` lẫn `ID_FIELD`. Chỉ
+   dùng doc_values khi **mọi** doc mẫu có field đơn trị và trùng khít `_id`.
+   Field thiếu, đa trị, hay chỉ gần giống đều bị từ chối — tự động quay về
+   `_id`, có ghi log. Kiểm tra riêng cho từng cluster.
+2. **Sau khi quét**, quét lại file ID tìm dòng `null` hoặc rỗng. Mẫu 100 doc
+   không chứng minh được cho 8M; doc nào thiếu field sẽ cho ra `null`, và
+   công cụ dừng thay vì đem `null` đi so sánh.
+
+Tắt hẳn bằng `ID_FIELD=`.
+
 ### Pha 3 — RECONCILE
 
 1. Refresh cả hai bên. **Bắt buộc** — `bench-es6` có `refresh_interval: -1`,
@@ -499,8 +525,9 @@ pha 1 chậm thêm khoảng **30–50%** so với không journal.
 | `ES6_USER` / `ES6_PW` | `elastic` / `$ELASTIC_PW` | |
 | `ES9_USER` / `ES9_PW` | `elastic` / `$ELASTIC_PW` | |
 | `STATE_DIR` | `./.rollback-state` | Chứa cả journal — xem §3c |
-| `PAGE_SIZE` | `5000` | Chi phối bộ nhớ pha 1 |
+| `PAGE_SIZE` | `10000` | Chi phối bộ nhớ pha 1. 10000 là trần của `index.max_result_window` |
 | `MGET_BATCH` | `1000` | ID mỗi request đọc pre-image |
+| `ID_FIELD` | `id` | Field keyword song hành `_id`, đọc từ doc_values khi quét ID. `""` để tắt |
 | `MAX_BULK_BYTES` | `5000000` | Trần mỗi request `_bulk` |
 | `SAFETY_MARGIN` | `300` | Giây lùi khỏi `cutover_at` |
 | `MAX_DELETE_RATIO` | `0.10` | Chặn nếu số xoá vượt tỉ lệ này của ES6 |

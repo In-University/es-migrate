@@ -39,7 +39,7 @@
 #   ./es_rollback.sh status      show phase and counters
 #   ./es_rollback.sh verify      re-run phase 4 on its own
 #   ./es_rollback.sh undo        restore ES6 from the journal
-#   ./es_rollback.sh reset       restore refresh_interval, drop state
+#   ./es_rollback.sh reset       drop state (keeps the journal)
 #
 # Env vars:
 #   ES6_URL / ES9_URL     base URLs               (default http://localhost:9200)
@@ -48,7 +48,7 @@
 #   ES6_USER / ES6_PW     auth for ES6            (default elastic / $ELASTIC_PW)
 #   ES9_USER / ES9_PW     auth for ES9            (default elastic / $ELASTIC_PW)
 #   STATE_DIR             state + journal dir     (default ./.rollback-state)
-#   PAGE_SIZE             search page size        (default 5000)
+#   PAGE_SIZE             search page size        (default 10000, ES cap)
 #   MAX_BULK_BYTES        bulk chunk cap          (default 5000000)
 #   SAFETY_MARGIN         seconds shaved off cutover_at (default 300)
 #   MAX_DELETE_RATIO      refuse deletes above this share of ES6 (default 0.10)
@@ -56,9 +56,14 @@
 #   FREEZE_WAIT           seconds between freeze samples (default 30)
 #   SAMPLE_N              docs compared in verify (default 1000)
 #   MGET_BATCH            ids per pre-image _mget (default 1000)
+#   ID_FIELD              keyword field mirroring _id, read from doc_values
+#                         during the id walk (default "id"; "" disables).
+#                         Checked against _id on a sample before use.
 #   SINCE                 override cutover_at     (ISO-8601, optional)
 #   ALLOW_PARTIAL         "true" lets the gate pass with dead letters
 #   ASSUME_YES            "true" skips the delete-ratio confirmation
+#   DEBUG_TIMING          "1" adds DEBUG lines attributing time per page
+#                         (temporary instrumentation, see the block below)
 #
 # Exit codes: 0 ok | 1 fatal | 2 finished with dead letters | 130 interrupted
 #
@@ -73,7 +78,9 @@ ES6_PW="${ES6_PW:-${ELASTIC_PW:-}}"
 ES9_USER="${ES9_USER:-elastic}"
 ES9_PW="${ES9_PW:-${ELASTIC_PW:-}}"
 STATE_DIR="${STATE_DIR:-./.rollback-state}"
-PAGE_SIZE="${PAGE_SIZE:-5000}"
+# 10000 is the ceiling: index.max_result_window caps `size`, and
+# search_after does not lift it.
+PAGE_SIZE="${PAGE_SIZE:-10000}"
 MAX_BULK_BYTES="${MAX_BULK_BYTES:-5000000}"
 SAFETY_MARGIN="${SAFETY_MARGIN:-300}"
 MAX_DELETE_RATIO="${MAX_DELETE_RATIO:-0.10}"
@@ -81,6 +88,9 @@ MAX_RETRY="${MAX_RETRY:-6}"
 FREEZE_WAIT="${FREEZE_WAIT:-10}"
 SAMPLE_N="${SAMPLE_N:-1000}"
 MGET_BATCH="${MGET_BATCH:-1000}"
+ID_FIELD="${ID_FIELD:-id}"
+USE_DV=0
+ID_JQ='.hits.hits[]._id'
 ALLOW_PARTIAL="${ALLOW_PARTIAL:-false}"
 ASSUME_YES="${ASSUME_YES:-false}"
 SINCE="${SINCE:-}"
@@ -177,25 +187,204 @@ http_retry() {
 es6() { http_retry "$ES6_USER" "$ES6_PW" "$@"; }
 es9() { http_retry "$ES9_USER" "$ES9_PW" "$@"; }
 
+# ===================== DEBUG timing instrumentation ======================
+# TEMPORARY. Exists only to answer one question: when a page takes minutes,
+# where does the time go -- reading from ES9, reading pre-images from ES6,
+# writing to ES6, or local jq/awk work? That distinguishes an I/O-starved
+# cluster from a slow script, and the two have completely different fixes.
+#
+# Off by default and costs nothing when off (every dbg_* returns on the
+# first test). Enable with DEBUG_TIMING=1.
+#
+# TO REMOVE: delete this block, then `grep -n 'dbg_' es_rollback.sh` and
+# delete those call sites. Every line it prints contains "DEBUG" so
+# `grep -v DEBUG` cleans up a captured log.
+#
+DEBUG_TIMING="${DEBUG_TIMING:-0}"
+DBG_SEARCH=0; DBG_JOURNAL=0; DBG_BULK=0; DBG_PAGE_T0=0; DBG_PHASE_T0=0
+
+# Microseconds. EPOCHREALTIME is a bash builtin (no fork) formatted as
+# sec.microsec; stripping the dot gives integer microseconds directly, so
+# timing a call costs no process spawn. LC_ALL=C above guarantees the dot.
+dbg_us() {
+  if [ -n "${EPOCHREALTIME:-}" ]; then printf '%s' "${EPOCHREALTIME/./}"
+  else printf '%s000000' "$(date -u +%s)"; fi
+}
+
+dbg_t0() { [ "$DEBUG_TIMING" = "1" ] || return 0; dbg_us; }
+
+# dbg_add <accumulator-var> <start-us>
+dbg_add() {
+  [ "$DEBUG_TIMING" = "1" ] || return 0
+  [ -n "${2:-}" ] || return 0
+  eval "$1=\$(( \${$1:-0} + \$(dbg_us) - \$2 ))"
+}
+
+dbg_page_start() {
+  [ "$DEBUG_TIMING" = "1" ] || return 0
+  DBG_SEARCH=0; DBG_JOURNAL=0; DBG_BULK=0; DBG_PAGE_T0="$(dbg_us)"
+}
+
+dbg_page_end() {
+  [ "$DEBUG_TIMING" = "1" ] || return 0
+  local total local_ms
+  total=$(( $(dbg_us) - DBG_PAGE_T0 ))
+  local_ms=$(( total - DBG_SEARCH - DBG_JOURNAL - DBG_BULK ))
+  printf '%s DEBUG page %s docs | total %sms = es9_search %sms + es6_mget %sms + es6_bulk %sms + local %sms\n' \
+    "$(date -u +%H:%M:%S)" "${1:-?}" \
+    "$((total / 1000))" "$((DBG_SEARCH / 1000))" "$((DBG_JOURNAL / 1000))" \
+    "$((DBG_BULK / 1000))" "$((local_ms / 1000))" | tee -a "$LOG"
+}
+
+dbg_phase_start() { [ "$DEBUG_TIMING" = "1" ] || return 0; DBG_PHASE_T0="$(dbg_us)"; }
+
+dbg_phase_end() {
+  [ "$DEBUG_TIMING" = "1" ] || return 0
+  printf '%s DEBUG %s took %ss\n' "$(date -u +%H:%M:%S)" "$1" \
+    "$(( ($(dbg_us) - DBG_PHASE_T0) / 1000000 ))" | tee -a "$LOG"
+}
+
+# dbg_step <label> <start-us> -- one-off durations outside the page loop.
+dbg_step() {
+  [ "$DEBUG_TIMING" = "1" ] || return 0
+  printf '%s DEBUG %s took %sms\n' "$(date -u +%H:%M:%S)" "$1" \
+    "$(( ($(dbg_us) - $2) / 1000 ))" | tee -a "$LOG"
+}
+
+# --- id-export breakdown -------------------------------------------------
+# The id walk is the longest single stretch of a run, and "search that only
+# returns ids" is not obviously cheap or obviously expensive -- the cost
+# could be Elasticsearch's fetch phase, the jq parses, or appending to the
+# output file. Each of those has a completely different fix, so measure all
+# of them separately instead of guessing.
+DEBUG_EVERY="${DEBUG_EVERY:-50}"
+DBG_EXP_BODY=0; DBG_EXP_HTTP=0; DBG_EXP_COUNT=0
+DBG_EXP_WRITE=0; DBG_EXP_CURSOR=0; DBG_EXP_IDS=0; DBG_EXP_T0=0
+
+dbg_export_reset() {
+  [ "$DEBUG_TIMING" = "1" ] || return 0
+  DBG_EXP_BODY=0; DBG_EXP_HTTP=0; DBG_EXP_COUNT=0
+  DBG_EXP_WRITE=0; DBG_EXP_CURSOR=0; DBG_EXP_IDS=0
+  DBG_EXP_T0="$(dbg_us)"
+}
+
+# Average microseconds -> "12.3" milliseconds.
+dbg_avg_ms() {
+  local n="$2" v
+  [ "${n:-0}" -gt 0 ] || n=1
+  v=$(( $1 / n ))
+  printf '%d.%d' "$((v / 1000))" "$(( (v % 1000) / 100 ))"
+}
+
+# dbg_export_tick <side> <pages>
+#
+# The first three pages always report, so the very first seconds of a run
+# already say whether the cost is the cluster or the script -- waiting for
+# page 50 on a slow export means waiting minutes for the first data point.
+dbg_export_tick() {
+  [ "$DEBUG_TIMING" = "1" ] || return 0
+  if [ "$2" -le 3 ] || { [ "${DEBUG_EVERY:-0}" -gt 0 ] && [ $(( $2 % DEBUG_EVERY )) -eq 0 ]; }; then
+    dbg_export_summary "$1" "$2"
+  fi
+}
+
+# dbg_export_summary <side> <pages>
+#
+# "other" is wall clock minus everything measured: process spawn overhead,
+# the loop itself, and anything not instrumented. If it is large, the script
+# is the problem; if http dominates, the cluster is.
+dbg_export_summary() {
+  [ "$DEBUG_TIMING" = "1" ] || return 0
+  local side="$1" pages="$2" wall other rate
+  [ "${pages:-0}" -gt 0 ] || return 0
+  wall=$(( $(dbg_us) - DBG_EXP_T0 ))
+  other=$(( wall - DBG_EXP_BODY - DBG_EXP_HTTP - DBG_EXP_COUNT - DBG_EXP_WRITE - DBG_EXP_CURSOR ))
+  rate=$(( DBG_EXP_IDS * 1000000 / (wall > 0 ? wall : 1) ))
+  printf '%s DEBUG %s export: %s pages, %s ids, %ss elapsed, %s ids/s | avg/page: http %sms  write %sms  count %sms  cursor %sms  body %sms  other %sms\n' \
+    "$(date -u +%H:%M:%S)" "$side" "$pages" "$DBG_EXP_IDS" "$((wall / 1000000))" "$rate" \
+    "$(dbg_avg_ms "$DBG_EXP_HTTP" "$pages")" \
+    "$(dbg_avg_ms "$DBG_EXP_WRITE" "$pages")" \
+    "$(dbg_avg_ms "$DBG_EXP_COUNT" "$pages")" \
+    "$(dbg_avg_ms "$DBG_EXP_CURSOR" "$pages")" \
+    "$(dbg_avg_ms "$DBG_EXP_BODY" "$pages")" \
+    "$(dbg_avg_ms "$other" "$pages")" | tee -a "$LOG"
+}
+# =================== end DEBUG timing instrumentation ====================
+
 # ------------------------------------------------------------- json shaping --
 
 # Search body. Built by jq so PIT ids and search_after arrays are never
 # string-interpolated into shell-quoted JSON.
 build_body() {
-  local mode="$1" pit="$2" since="$3" out="$4" sa_src="$5"
+  local mode="$1" pit="$2" since="$3" out="$4" sa_src="$5" op="${6:-gt}"
   local sa="null"
   [ -s "$sa_src" ] && sa="$(cat "$sa_src")"
-  jq -n --arg mode "$mode" --arg pit "$pit" --arg since "$since" \
+  jq -n --arg mode "$mode" --arg pit "$pit" --arg since "$since" --arg op "$op" \
+        --arg idf "$ID_FIELD" --argjson dv "${USE_DV:-0}" \
         --argjson size "$PAGE_SIZE" --argjson sa "$sa" '
       (if $mode == "delta"
-       then { query: {range: {updated_at: {gt: $since}}},
+       then { query: {range: {updated_at: {($op): $since}}},
               sort: [{updated_at: "asc"}, {_shard_doc: "asc"}] }
-       else { query: {match_all: {}}, sort: [{_shard_doc: "asc"}], _source: false }
+       else ({ query: {match_all: {}}, sort: [{_shard_doc: "asc"}], _source: false }
+             # Ids out of doc_values instead of the stored-fields fetch; see
+             # id_field_probe for why this is opt-in and verified first.
+             + (if $dv == 1
+                then { stored_fields: "_none_", docvalue_fields: [$idf] }
+                else {} end))
        end)
     + { size: $size }
     + (if $pit == "" then {} else { pit: {id: $pit, keep_alive: "15m"} } end)
     + (if $sa == null then { track_total_hits: true } else { search_after: $sa } end)
   ' >"$out"
+}
+
+# --------------------------------------------------------------- id source --
+#
+# Walking every id is the longest stretch of a run, and `_source: false` does
+# not make it cheap: _id still comes from the stored-fields fetch, one
+# row-oriented read per hit. A keyword field carrying the same value is read
+# from columnar doc_values instead -- measured on the benchmark cluster at
+# 0.34s vs 0.11s cold and 0.16s vs 0.04s warm for a 5000-hit page.
+#
+# That only holds if the field really does mirror _id, and getting it wrong
+# is not a performance bug: phase 3 would diff the wrong id set and delete
+# the wrong documents. So prove it per cluster on a sample -- ask for both
+# _id and the field, require every sampled doc to agree, and fall back to
+# _id otherwise. Set ID_FIELD="" to skip the optimisation entirely.
+
+id_field_probe() {
+  local es_fn="$1" url="$2" index="$3" side="$4" total ok
+  USE_DV=0; ID_JQ='.hits.hits[]._id'
+
+  [ -n "$ID_FIELD" ] || { log "   $side ids: ID_FIELD unset -- reading _id"; return 0; }
+  case "$ID_FIELD" in
+    *[\"\\]*) warn "$side ids: ID_FIELD contains quotes -- reading _id"; return 0 ;;
+  esac
+
+  # No stored_fields:_none_ here on purpose -- the probe needs _id back so it
+  # has something to compare the field against.
+  jq -n --arg f "$ID_FIELD" \
+    '{size: 100, _source: false, docvalue_fields: [$f], sort: ["_doc"],
+      query: {match_all: {}}}' >"$WORK/probe.json"
+  "$es_fn" POST "$url/$index/_search" application/json "$WORK/probe.json" >/dev/null || {
+    warn "$side ids: doc_values probe failed -- reading _id"; return 0; }
+
+  total="$(jq '.hits.hits | length' "$RESP")"
+  # Single-valued and byte-identical to _id. A multi-valued or merely
+  # similar field is rejected: order is not guaranteed and near-misses are
+  # exactly what would corrupt the diff.
+  ok="$(jq --arg f "$ID_FIELD" \
+      '[ .hits.hits[] | select((.fields[$f] | length) == 1 and .fields[$f][0] == ._id) ] | length' \
+      "$RESP")"
+
+  if [ "${total:-0}" -gt 0 ] && [ "$ok" = "$total" ]; then
+    USE_DV=1
+    ID_JQ=".hits.hits[].fields[\"$ID_FIELD\"][0]"
+    log "   $side ids: '$ID_FIELD' equals _id on all $total sampled docs -- using doc_values"
+  else
+    warn "$side ids: '$ID_FIELD' matched ${ok:-0}/${total:-0} sampled docs -- reading _id"
+  fi
+  return 0
 }
 
 # One ES9 delta page -> id list, bulk chunks capped at MAX_BULK_BYTES, and a
@@ -317,11 +506,14 @@ bulk_send() {
   BULK_OK=0; BULK_FATAL=0
   cp "$file" "$WORK/send.ndjson"
   while :; do
-    local code counts ok retry fatal
+    local code counts ok retry fatal _dbg
+    _dbg="$(dbg_t0)"
     code="$(es6 POST "$ES6_URL/$DST_INDEX/_doc/_bulk" application/x-ndjson "$WORK/send.ndjson")" || {
+      dbg_add DBG_BULK "$_dbg"
       warn "bulk request failed with HTTP $code"
       return 1
     }
+    dbg_add DBG_BULK "$_dbg"
     counts="$(parse_bulk "$RESP" "$WORK/send.ndjson" "$WORK/retry.ndjson" "$DEADLETTER")"
     ok="$(echo "$counts" | awk '{print $1}')"
     retry="$(echo "$counts" | awk '{print $2}')"
@@ -348,7 +540,7 @@ bulk_send() {
 # value even with refresh_interval unset. A search-based read could miss a
 # recent write and journal a stale pre-image.
 journal_preimage() {
-  local idfile="$1" op="${2:-delta}" part seq n
+  local idfile="$1" op="${2:-delta}" part seq n _dbg
   [ -s "$idfile" ] || return 0
   # Batched independently of PAGE_SIZE. A _mget answers with the full _source
   # of every id it was asked for, so one request per page would pull
@@ -364,8 +556,10 @@ journal_preimage() {
   for part in "$WORK"/pre.*; do
     [ -s "$part" ] || continue
     ids_to_body "$part" "$WORK/mget.json" mget
+    _dbg="$(dbg_t0)"
     es6 POST "$ES6_URL/$DST_INDEX/_doc/_mget" application/json "$WORK/mget.json" >/dev/null \
       || { warn "pre-image _mget failed -- refusing to write without a journal"; return 1; }
+    dbg_add DBG_JOURNAL "$_dbg"
     state_load
     seq="${JOURNAL_SEQ:-0}"
     mget_to_journal "$RESP" "$seq" "$op" | gzip -1 >>"$JOURNAL"
@@ -461,40 +655,28 @@ freeze_max_updated() {
 
 # ------------------------------------------------------------ refresh state --
 #
-# bench-es6 ships with refresh_interval: -1 (mapping-es6.json). Left alone,
-# nothing written in phase 1 is visible to the phase 3 id export, and the
-# diff would read freshly-synced documents as missing from ES6.
-
-refresh_interval_capture() {
-  es6 GET "$ES6_URL/$DST_INDEX/_settings" >/dev/null || die "cannot read settings"
-  state_set ORIG_REFRESH "$(jq -r '.[].settings.index.refresh_interval // "null"' "$RESP")"
-  jq -n '{index: {refresh_interval: "30s"}}' >"$WORK/ri.json"
-  es6 PUT "$ES6_URL/$DST_INDEX/_settings" application/json "$WORK/ri.json" >/dev/null \
-    || die "cannot set refresh_interval on $DST_INDEX"
-  log "   refresh_interval: $ORIG_REFRESH -> 30s (restored by 'reset')"
-}
-
-refresh_interval_restore() {
-  state_load
-  local orig="${ORIG_REFRESH:-}"
-  [ -n "$orig" ] || return 0
-  if [ "$orig" = "null" ]; then
-    jq -n '{index: {refresh_interval: null}}' >"$WORK/ri.json"
-  else
-    jq -n --arg v "$orig" '{index: {refresh_interval: $v}}' >"$WORK/ri.json"
-  fi
-  es6 PUT "$ES6_URL/$DST_INDEX/_settings" application/json "$WORK/ri.json" >/dev/null || true
-  log "   refresh_interval restored to $orig"
-  [ "$orig" = "-1" ] && warn "original was -1; ES6 will not refresh on its own"
-  return 0
-}
+# Deliberately NOT touched. An earlier version set refresh_interval to 30s
+# for the duration of the run, on the theory that phase 1's writes had to
+# become visible to phase 3's id export. They do -- but the script already
+# forces that with explicit _refresh calls at the end of phase 1, at the
+# start of phase 3, and again in phase 4. A periodic refresh added nothing,
+# and cost a new segment every 30 seconds for the whole of phase 1, each one
+# feeding the merge queue on a disk that is usually the bottleneck already.
+#
+# Leaving a bulk-load target at refresh_interval: -1 is also what Elastic's
+# own indexing guidance recommends: segments then get flushed by
+# indexing-buffer pressure rather than by a clock.
+#
+# Pre-image reads are unaffected -- _mget is realtime and reads the translog,
+# so it sees writes that have never been refreshed.
 
 # ------------------------------------------------------------------ phase 1 --
 
 phase_delta() {
   log "== phase 1: delta sync $SRC_INDEX -> $DST_INDEX =="
+  dbg_phase_start
   state_load
-  local since="$EFFECTIVE_SINCE" pit=""
+  local since="$EFFECTIVE_SINCE" pit="" _dbg
   local synced="${SYNCED:-0}" seen="${SEEN:-0}" dl="${DL_COUNT:-0}"
   # `gt` on the first pass; a restart after a PIT expiry switches to `gte` so
   # the whole group sharing the watermark timestamp is re-scanned. With `gt`,
@@ -516,8 +698,11 @@ phase_delta() {
       exit 130
     fi
 
+    dbg_page_start
     build_body delta "$pit" "$since" "$WORK/body.json" "$SA_FILE" "$range_op"
+    _dbg="$(dbg_t0)"
     if ! es9 POST "$ES9_URL/_search" application/json "$WORK/body.json" >/dev/null; then
+      dbg_add DBG_SEARCH "$_dbg"
       # An expired PIT (or a node restart) shows up as search_context_missing.
       # ES9 is frozen, so reopening and restarting from the last committed
       # watermark is exactly right: the overlap rewrites identical content.
@@ -530,8 +715,14 @@ phase_delta() {
         state_load; since="${WATERMARK:-$since}"; range_op="gte"; : >"$SA_FILE"
         continue
       fi
-      die "delta search failed: $(head -c 400 "$RESP")"
+      [ "$INTERRUPTED" -eq 1 ] && {
+        state_set SYNCED "$synced"; state_set SEEN "$seen"; state_set DL_COUNT "$dl"
+        log "   interrupted during delta search -- checkpointed at seen=$seen"
+        exit 130
+      }
+      die "delta search failed: $(head -c 200 "$RESP")"
     fi
+    dbg_add DBG_SEARCH "$_dbg"
 
     if [ "$seen" -eq 0 ] && [ ! -s "$SA_FILE" ]; then
       state_set TOTAL_HITS "$(jq -r '.hits.total.value // .hits.total' "$RESP")"
@@ -563,10 +754,12 @@ phase_delta() {
     # it earlier would let a crash skip the page entirely.
     mv -f "$WORK/next_sa.json" "$SA_FILE"
     log "   page: $hits docs (seen=$seen synced=$synced deadletter=$dl)"
+    dbg_page_end "$hits"
   done
 
   pit_close "$ES9_URL" "$pit"; rm -f "$PIT_FILE" "$SA_FILE"
   es6 POST "$ES6_URL/$DST_INDEX/_refresh" >/dev/null || warn "refresh failed"
+  dbg_phase_end "phase 1"
   log "   delta sync finished: seen=$seen synced=$synced deadletter=$dl"
   state_set PHASE DELTA_DONE
 }
@@ -604,49 +797,106 @@ reconciliation may then remove them."
 # or duplicates ids.
 
 export_ids_es9() {
-  local out="$1" pit n
+  local out="$1" pit n _d _pages=0
   : >"$out"; : >"$SA_FILE"
+  id_field_probe es9 "$ES9_URL" "$SRC_INDEX" ES9
+  dbg_export_reset
   pit="$(pit_open "$ES9_URL" "$SRC_INDEX")" || die "cannot open PIT for id export"
   while :; do
     [ "$INTERRUPTED" -eq 1 ] && { pit_close "$ES9_URL" "$pit"; exit 130; }
+    _d="$(dbg_t0)"
     build_body ids "$pit" "" "$WORK/body.json" "$SA_FILE"
-    es9 POST "$ES9_URL/_search" application/json "$WORK/body.json" >/dev/null \
-      || die "ES9 id export failed: $(head -c 300 "$RESP")"
-    n="$(jq '.hits.hits | length' "$RESP")"
+    dbg_add DBG_EXP_BODY "$_d"
+
+    _d="$(dbg_t0)"
+    es9 POST "$ES9_URL/_search" application/json "$WORK/body.json" >/dev/null || {
+      # Ctrl-C kills curl mid-request, so the failure lands here before the
+      # loop head gets to test the flag. Without this it dies as if the
+      # cluster had failed, printing $RESP -- which still holds the previous
+      # *successful* response, i.e. a screenful of pit_id.
+      [ "$INTERRUPTED" -eq 1 ] && {
+        pit_close "$ES9_URL" "$pit"
+        log "   interrupted during ES9 id export -- 'resume' restarts it from scratch"
+        exit 130
+      }
+      die "ES9 id export failed: $(head -c 200 "$RESP")"
+    }
+    dbg_add DBG_EXP_HTTP "$_d"
+
+    _d="$(dbg_t0)"; n="$(jq '.hits.hits | length' "$RESP")"; dbg_add DBG_EXP_COUNT "$_d"
     [ "$n" -eq 0 ] && break
-    jq -r '.hits.hits[]._id' "$RESP" >>"$out"
-    jq -c '.hits.hits[-1].sort' "$RESP" >"$SA_FILE"
+
+    _d="$(dbg_t0)"; jq -r "$ID_JQ" "$RESP" >>"$out"; dbg_add DBG_EXP_WRITE "$_d"
+    _d="$(dbg_t0)"; jq -c '.hits.hits[-1].sort' "$RESP" >"$SA_FILE"; dbg_add DBG_EXP_CURSOR "$_d"
+
+    _pages=$((_pages + 1)); DBG_EXP_IDS=$((DBG_EXP_IDS + n))
+    dbg_export_tick ES9 "$_pages"
   done
   pit_close "$ES9_URL" "$pit"; rm -f "$SA_FILE"
+  dbg_export_summary ES9 "$_pages"
 }
 
 export_ids_es6() {
-  local out="$1" sid n
+  local out="$1" sid n _d _pages=0
   : >"$out"
-  jq -n --argjson size "$PAGE_SIZE" \
-    '{size: $size, sort: ["_doc"], _source: false, query: {match_all: {}}}' >"$WORK/body.json"
+  id_field_probe es6 "$ES6_URL" "$DST_INDEX" ES6
+  dbg_export_reset
+  jq -n --argjson size "$PAGE_SIZE" --arg f "$ID_FIELD" --argjson dv "$USE_DV" \
+    '{size: $size, sort: ["_doc"], _source: false, query: {match_all: {}}}
+     + (if $dv == 1 then {stored_fields: "_none_", docvalue_fields: [$f]} else {} end)' \
+    >"$WORK/body.json"
   es6 POST "$ES6_URL/$DST_INDEX/_search?scroll=15m" application/json "$WORK/body.json" >/dev/null \
-    || die "ES6 id export failed: $(head -c 300 "$RESP")"
+    || die "ES6 id export failed: $(head -c 200 "$RESP")"
   while :; do
     [ "$INTERRUPTED" -eq 1 ] && exit 130
+    _d="$(dbg_t0)"
     n="$(jq '.hits.hits | length' "$RESP")"
     sid="$(jq -r '._scroll_id // ""' "$RESP")"
+    dbg_add DBG_EXP_COUNT "$_d"
     [ "$n" -eq 0 ] && break
-    jq -r '.hits.hits[]._id' "$RESP" >>"$out"
+
+    _d="$(dbg_t0)"; jq -r "$ID_JQ" "$RESP" >>"$out"; dbg_add DBG_EXP_WRITE "$_d"
+
+    _d="$(dbg_t0)"
     jq -n --arg s "$sid" '{scroll: "15m", scroll_id: $s}' >"$WORK/scroll.json"
+    dbg_add DBG_EXP_BODY "$_d"
+
+    _pages=$((_pages + 1)); DBG_EXP_IDS=$((DBG_EXP_IDS + n))
+    dbg_export_tick ES6 "$_pages"
+
+    _d="$(dbg_t0)"
     es6 POST "$ES6_URL/_search/scroll" application/json "$WORK/scroll.json" >/dev/null || {
+      [ "$INTERRUPTED" -eq 1 ] && {
+        log "   interrupted during ES6 id export -- 'resume' restarts it from scratch"
+        exit 130
+      }
       # A scroll cannot be resumed from the middle, and a truncated export
       # would understate ES6's id set -- which turns into wrong deletes.
       die "ES6 scroll context lost mid-export. Re-run 'resume' to restart the id export."
     }
+    dbg_add DBG_EXP_HTTP "$_d"
   done
+  dbg_export_summary ES6 "$_pages"
   jq -n --arg s "$sid" '{scroll_id: [$s]}' >"$WORK/scroll.json"
   es6 DELETE "$ES6_URL/_search/scroll" application/json "$WORK/scroll.json" >/dev/null 2>&1 || true
   return 0
 }
 
+# Refuse to diff an id file containing a literal "null" or a blank line --
+# both mean a document did not produce an id, and neither is a value that
+# should ever be compared or deleted.
+assert_ids_sane() {
+  local file="$1" side="$2" bad
+  bad="$(grep -c -x -e 'null' -e '' "$file" || true)"
+  [ "${bad:-0}" -eq 0 ] || die "$side id export contains $bad null/blank id(s).
+Some documents have no '$ID_FIELD' field, so their ids came back empty.
+Re-run with ID_FIELD= to read ids from _id instead. Refusing to diff."
+  return 0
+}
+
 phase_reconcile() {
   log "== phase 3: reconcile deletes =="
+  dbg_phase_start
   state_load
   es6 POST "$ES6_URL/$DST_INDEX/_refresh" >/dev/null || warn "ES6 refresh failed"
   es9 POST "$ES9_URL/$SRC_INDEX/_refresh" >/dev/null || warn "ES9 refresh failed"
@@ -656,10 +906,18 @@ phase_reconcile() {
   es6 GET "$ES6_URL/$DST_INDEX/_count" >/dev/null || die "count failed"; c6="$(jq -r '.count' "$RESP")"
   log "   counts before reconcile: $SRC_INDEX=$c9 $DST_INDEX=$c6"
 
+  local _dbg
   log "   exporting live ids from ES9/$SRC_INDEX"
-  export_ids_es9 "$WORK/es9_ids.raw"
+  _dbg="$(dbg_t0)"; export_ids_es9 "$WORK/es9_ids.raw"; dbg_step "ES9 id export" "$_dbg"
   log "   exporting live ids from ES6/$DST_INDEX"
-  export_ids_es6 "$WORK/es6_ids.raw"
+  _dbg="$(dbg_t0)"; export_ids_es6 "$WORK/es6_ids.raw"; dbg_step "ES6 id export" "$_dbg"
+
+  # The doc_values probe samples 100 documents; it cannot prove that all 8M
+  # carry ID_FIELD. A document missing it yields a literal "null" line, and a
+  # null id reaching the diff is a delete aimed at the wrong document. One
+  # sequential scan per file is cheap next to a 15-minute export.
+  assert_ids_sane "$WORK/es9_ids.raw" ES9
+  assert_ids_sane "$WORK/es6_ids.raw" ES6
 
   sort -u -T "$WORK" -S 25% -o "$STATE_DIR/es9_ids.sorted" "$WORK/es9_ids.raw"
   sort -u -T "$WORK" -S 25% -o "$STATE_DIR/es6_ids.sorted" "$WORK/es6_ids.raw"
@@ -706,6 +964,7 @@ this really is what happened on ES9."
   es6 POST "$ES6_URL/$DST_INDEX/_refresh" >/dev/null || warn "refresh failed"
   state_set DELETED "$ndel"; state_set REPAIRED "$nrep"
   state_set PHASE RECONCILE_DONE
+  dbg_phase_end "phase 3"
   log "   reconcile done: deleted=$ndel repaired=$nrep"
 }
 
@@ -903,7 +1162,6 @@ cmd_run() {
   state_set SRC_INDEX_S "$SRC_INDEX"; state_set DST_INDEX_S "$DST_INDEX"
   state_set SYNCED 0; state_set SEEN 0; state_set DL_COUNT 0; state_set JOURNAL_SEQ 0
   state_set PHASE DELTA_SYNC
-  refresh_interval_capture
   pipeline
 }
 
@@ -963,7 +1221,6 @@ EOF
 cmd_reset() {
   state_load
   acquire_lock
-  refresh_interval_restore
   rm -f "$STATE" "$SA_FILE" "$PIT_FILE"
   rm -rf "$WORK"
   if [ -s "$JOURNAL" ]; then
