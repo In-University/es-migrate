@@ -33,21 +33,22 @@
 # NOTE: jq is not part of a stock Ubuntu image -- `apt-get install -y jq`.
 #
 # Usage:
-#   ./es_rollback.sh preflight   checks only, writes nothing
-#   ./es_rollback.sh plan        preflight + report delta and count sizes
-#   ./es_rollback.sh run         start a fresh run
-#   ./es_rollback.sh resume      continue an interrupted run
-#   ./es_rollback.sh status      show phase and counters
-#   ./es_rollback.sh verify      re-run phase 4 on its own
-#   ./es_rollback.sh undo        restore ES6 from the journal
-#   ./es_rollback.sh reset       drop state (keeps the journal)
+#   ./es_rollback_py.sh preflight   checks only, writes nothing
+#   ./es_rollback_py.sh run         start a fresh run
+#   ./es_rollback_py.sh resume      continue an interrupted run
+#   ./es_rollback_py.sh status      show phase and counters
+#   ./es_rollback_py.sh verify      re-run phase 4 on its own
+#   ./es_rollback_py.sh undo        restore ES6 from the journal
+#   ./es_rollback_py.sh reset       drop state (keeps the journal)
 #
 # Env vars, grouped by how often you have any business touching them.
 #
 # CONNECTION -- set these on every run:
 #   ES6_URL / ES9_URL     base URLs               (default http://localhost:9200)
-#   SRC_INDEX             ES9 index, the source   (default bench-es9)
-#   DST_INDEX             ES6 index, the target   (default bench-es6)
+#   SRC_INDEX             ES9 index or alias, the source   (default bench-es9)
+#   DST_INDEX             ES6 index or alias, the target   (default bench-es6)
+#   TS_FIELD              field the delta window ranges over, e.g.
+#                         updated_at or system_update_at   (default updated_at)
 #   ES6_USER / ES6_PW     auth for ES6            (default elastic / $ELASTIC_PW)
 #   ES9_USER / ES9_PW     auth for ES9            (default elastic / $ELASTIC_PW)
 #   STATE_DIR             state + journal dir     (default ./.rollback-state)
@@ -59,6 +60,8 @@
 #   SLICES                parallel slices for the id walk: "auto" = one per
 #                         shard (default), "1" disables, or an explicit count
 #   MAX_RETRY             HTTP retry attempts     (default 6)
+#   PROGRESS_EVERY        pages between id-walk progress lines (default 50,
+#                         0 silences them)
 #
 # SAFETY -- read the phase they belong to before changing any of these:
 #   SAFETY_MARGIN         seconds shaved off cutover_at (default 300)
@@ -69,9 +72,9 @@
 #   ALLOW_PARTIAL         "true" lets the gate pass with dead letters
 #   ASSUME_YES            "true" skips the delete-ratio confirmation
 #
-# DEBUG -- temporary instrumentation, see the block further down:
-#   DEBUG_TIMING          "1" adds DEBUG lines attributing time per page
-#   DEBUG_EVERY           pages between id-walk DEBUG lines (default 50)
+# This script handles ONE index. For several, drive it from the outside:
+# es_rollback_all.sh loops over an index -> TS_FIELD map, and the Jenkins
+# pipeline runs one stage per index. Both call this script unchanged.
 #
 # Exit codes: 0 ok | 1 fatal | 2 finished with dead letters | 130 interrupted
 #
@@ -84,6 +87,10 @@ ES6_URL="${ES6_URL:-http://localhost:9200}"
 ES9_URL="${ES9_URL:-http://localhost:9200}"
 SRC_INDEX="${SRC_INDEX:-bench-es9}"
 DST_INDEX="${DST_INDEX:-bench-es6}"
+# The field a write bumps, and therefore the one the delta window ranges
+# over. It differs per index (updated_at, system_update_at, ...), so the
+# caller passes it; there is no safe default beyond the common case.
+TS_FIELD="${TS_FIELD:-updated_at}"
 ES6_USER="${ES6_USER:-elastic}"
 ES6_PW="${ES6_PW:-${ELASTIC_PW:-}}"
 ES9_USER="${ES9_USER:-elastic}"
@@ -101,6 +108,9 @@ MGET_BATCH="${MGET_BATCH:-1000}"
 # auto = one slice per shard (what slices=auto does on _reindex); 1 disables
 SLICES="${SLICES:-auto}"
 MAX_RETRY="${MAX_RETRY:-6}"
+# The id walk is the longest stretch of a run and prints nothing on its own;
+# without a heartbeat a healthy export is indistinguishable from a hang.
+PROGRESS_EVERY="${PROGRESS_EVERY:-50}"
 
 # ------------------------------------------------------------ config: 3/3 --
 # SAFETY. The last three disable a guard -- read the phase that uses one first.
@@ -220,137 +230,6 @@ http_retry() {
 es6() { http_retry "$ES6_USER" "$ES6_PW" "$@"; }
 es9() { http_retry "$ES9_USER" "$ES9_PW" "$@"; }
 
-# ===================== DEBUG timing instrumentation ======================
-# TEMPORARY. Answers one question: when a page takes minutes, is the time in
-# ES9 reads, ES6 pre-image reads, ES6 writes, or local parsing? An I/O-starved
-# cluster and a slow script have completely different fixes. Off by default,
-# costs nothing when off; enable with DEBUG_TIMING=1.
-#
-# TO REMOVE: delete this block, then `grep -n 'dbg_' es_rollback.sh` and
-# delete those call sites. Every line it prints contains "DEBUG" so
-# `grep -v DEBUG` cleans up a captured log.
-#
-DEBUG_TIMING="${DEBUG_TIMING:-0}"
-DBG_SEARCH=0; DBG_JOURNAL=0; DBG_BULK=0; DBG_PAGE_T0=0; DBG_PHASE_T0=0
-
-# Microseconds. EPOCHREALTIME is a bash builtin formatted sec.microsec, so
-# stripping the dot costs no process spawn. LC_ALL=C guarantees the dot.
-dbg_us() {
-  if [ -n "${EPOCHREALTIME:-}" ]; then printf '%s' "${EPOCHREALTIME/./}"
-  else printf '%s000000' "$(date -u +%s)"; fi
-}
-
-dbg_t0() { [ "$DEBUG_TIMING" = "1" ] || return 0; dbg_us; }
-
-# dbg_add <accumulator-var> <start-us>
-dbg_add() {
-  [ "$DEBUG_TIMING" = "1" ] || return 0
-  [ -n "${2:-}" ] || return 0
-  eval "$1=\$(( \${$1:-0} + \$(dbg_us) - \$2 ))"
-}
-
-dbg_page_start() {
-  [ "$DEBUG_TIMING" = "1" ] || return 0
-  DBG_SEARCH=0; DBG_JOURNAL=0; DBG_BULK=0; DBG_PAGE_T0="$(dbg_us)"
-}
-
-dbg_page_end() {
-  [ "$DEBUG_TIMING" = "1" ] || return 0
-  local total local_ms
-  total=$(( $(dbg_us) - DBG_PAGE_T0 ))
-  local_ms=$(( total - DBG_SEARCH - DBG_JOURNAL - DBG_BULK ))
-  printf '%s DEBUG page %s docs | total %sms = es9_search %sms + es6_mget %sms + es6_bulk %sms + local %sms\n' \
-    "$(date -u +%H:%M:%S)" "${1:-?}" \
-    "$((total / 1000))" "$((DBG_SEARCH / 1000))" "$((DBG_JOURNAL / 1000))" \
-    "$((DBG_BULK / 1000))" "$((local_ms / 1000))" | tee -a "$LOG"
-}
-
-dbg_phase_start() { [ "$DEBUG_TIMING" = "1" ] || return 0; DBG_PHASE_T0="$(dbg_us)"; }
-
-dbg_phase_end() {
-  [ "$DEBUG_TIMING" = "1" ] || return 0
-  printf '%s DEBUG %s took %ss\n' "$(date -u +%H:%M:%S)" "$1" \
-    "$(( ($(dbg_us) - DBG_PHASE_T0) / 1000000 ))" | tee -a "$LOG"
-}
-
-# dbg_step <label> <start-us> -- one-off durations outside the page loop.
-dbg_step() {
-  [ "$DEBUG_TIMING" = "1" ] || return 0
-  printf '%s DEBUG %s took %sms\n' "$(date -u +%H:%M:%S)" "$1" \
-    "$(( ($(dbg_us) - $2) / 1000 ))" | tee -a "$LOG"
-}
-
-# --- id-export breakdown -------------------------------------------------
-# The id walk is the longest stretch of a run, and its cost could be ES's
-# fetch phase, the jq parses, or appending to the output file -- different
-# fixes, so measure them separately.
-DEBUG_EVERY="${DEBUG_EVERY:-50}"
-DBG_EXP_BODY=0; DBG_EXP_HTTP=0; DBG_EXP_COUNT=0
-DBG_EXP_WRITE=0; DBG_EXP_CURSOR=0; DBG_EXP_IDS=0; DBG_EXP_T0=0
-
-dbg_export_reset() {
-  [ "$DEBUG_TIMING" = "1" ] || return 0
-  DBG_EXP_BODY=0; DBG_EXP_HTTP=0; DBG_EXP_COUNT=0
-  DBG_EXP_WRITE=0; DBG_EXP_CURSOR=0; DBG_EXP_IDS=0
-  DBG_EXP_T0="$(dbg_us)"
-}
-
-# Average microseconds -> "12.3" milliseconds.
-dbg_avg_ms() {
-  local n="$2" v
-  [ "${n:-0}" -gt 0 ] || n=1
-  v=$(( $1 / n ))
-  printf '%d.%d' "$((v / 1000))" "$(( (v % 1000) / 100 ))"
-}
-
-# dbg_export_total <side> <start-us> <file> <slices>
-#
-# Per-walker rates are the wrong number to judge slicing by: three walkers at
-# 8k ids/s beat one at 11k. Measure ids on disk over the whole export's wall
-# clock instead.
-dbg_export_total() {
-  [ "$DEBUG_TIMING" = "1" ] || return 0
-  local side="$1" t0="$2" file="$3" slices="$4" wall ids
-  wall=$(( $(dbg_us) - t0 ))
-  ids="$(wc -l <"$file" | tr -d ' ')"
-  printf '%s DEBUG %s export TOTAL: %s ids in %ss across %s slice(s) = %s ids/s\n' \
-    "$(date -u +%H:%M:%S)" "$side" "$ids" "$((wall / 1000000))" "$slices" \
-    "$(( ids * 1000000 / (wall > 0 ? wall : 1) ))" | tee -a "$LOG"
-}
-
-# dbg_export_tick <side> <pages>
-#
-# The first three pages always report: waiting for page 50 on a slow export
-# means waiting minutes for the first data point.
-dbg_export_tick() {
-  [ "$DEBUG_TIMING" = "1" ] || return 0
-  if [ "$2" -le 3 ] || { [ "${DEBUG_EVERY:-0}" -gt 0 ] && [ $(( $2 % DEBUG_EVERY )) -eq 0 ]; }; then
-    dbg_export_summary "$1" "$2"
-  fi
-}
-
-# dbg_export_summary <side> <pages>
-#
-# "other" is wall clock minus everything measured. Large "other" means the
-# script is the problem; http dominating means the cluster is.
-dbg_export_summary() {
-  [ "$DEBUG_TIMING" = "1" ] || return 0
-  local side="$1" pages="$2" wall other rate
-  [ "${pages:-0}" -gt 0 ] || return 0
-  wall=$(( $(dbg_us) - DBG_EXP_T0 ))
-  other=$(( wall - DBG_EXP_BODY - DBG_EXP_HTTP - DBG_EXP_COUNT - DBG_EXP_WRITE - DBG_EXP_CURSOR ))
-  rate=$(( DBG_EXP_IDS * 1000000 / (wall > 0 ? wall : 1) ))
-  printf '%s DEBUG %s export: %s pages, %s ids, %ss elapsed, %s ids/s in THIS walker | avg/page: http %sms  write %sms  count %sms  cursor %sms  body %sms  other %sms\n' \
-    "$(date -u +%H:%M:%S)" "$side" "$pages" "$DBG_EXP_IDS" "$((wall / 1000000))" "$rate" \
-    "$(dbg_avg_ms "$DBG_EXP_HTTP" "$pages")" \
-    "$(dbg_avg_ms "$DBG_EXP_WRITE" "$pages")" \
-    "$(dbg_avg_ms "$DBG_EXP_COUNT" "$pages")" \
-    "$(dbg_avg_ms "$DBG_EXP_CURSOR" "$pages")" \
-    "$(dbg_avg_ms "$DBG_EXP_BODY" "$pages")" \
-    "$(dbg_avg_ms "$other" "$pages")" | tee -a "$LOG"
-}
-# =================== end DEBUG timing instrumentation ====================
-
 # ------------------------------------------------------------- json shaping --
 
 # Body for one delta page. Built by jq so PIT ids and search_after arrays are
@@ -360,10 +239,10 @@ delta_page_body() {
   local pit="$1" since="$2" out="$3" cursor_src="$4" op="${5:-gt}"
   local cursor="null"
   [ -s "$cursor_src" ] && cursor="$(cat "$cursor_src")"
-  jq -n --arg pit "$pit" --arg since "$since" --arg op "$op" \
+  jq -n --arg pit "$pit" --arg since "$since" --arg op "$op" --arg tsf "$TS_FIELD" \
         --argjson size "$PAGE_SIZE" --argjson sa "$cursor" '
-      { query: {range: {updated_at: {($op): $since}}},
-        sort: [{updated_at: "asc"}, {_shard_doc: "asc"}], size: $size }
+      { query: {range: {($tsf): {($op): $since}}},
+        sort: [{($tsf): "asc"}, {_shard_doc: "asc"}], size: $size }
     + (if $pit == "" then {} else { pit: {id: $pit, keep_alive: "15m"} } end)
     + (if $sa == null then { track_total_hits: true } else { search_after: $sa } end)
   ' >"$out"
@@ -374,9 +253,9 @@ delta_page_body() {
 split_delta_page() {
   local resp="$1"
   rm -f "$WORK"/delta.chunk.*.ndjson
-  python3 - "$resp" "$WORK" "$BULK_BYTE_CAP" <<'PY'
+  python3 - "$resp" "$WORK" "$BULK_BYTE_CAP" "$TS_FIELD" <<'PY'
 import json, sys
-resp, work, cap = sys.argv[1], sys.argv[2], int(sys.argv[3])
+resp, work, cap, tsf = sys.argv[1], sys.argv[2], int(sys.argv[3]), sys.argv[4]
 J = lambda o: json.dumps(o, separators=(',', ':'), ensure_ascii=False)
 hits = json.load(open(resp, encoding='utf-8'))['hits']['hits']
 with open(work + '/delta.page.ids', 'w', encoding='utf-8') as f:
@@ -394,7 +273,7 @@ for h in hits:
         out = open('%s/delta.chunk.%04d.ndjson' % (work, i), 'w', encoding='utf-8'); sz = 0
     out.write(a + '\n' + b + '\n'); sz += n
 if out: out.close()
-print(len(hits), hits[-1]['_source'].get('updated_at', '') if hits else '')
+print(len(hits), hits[-1]['_source'].get(tsf, '') if hits else '')
 PY
 }
 
@@ -475,14 +354,11 @@ bulk_send() {
   local sent="$file" retry_file="$WORK/bulk.retry.ndjson"
   BULK_APPLIED=0; BULK_DEADLETTERED=0
   while :; do
-    local code counts ok retry fatal _dbg
-    _dbg="$(dbg_t0)"
+    local code counts ok retry fatal
     code="$(es6 POST "$ES6_URL/$DST_INDEX/_doc/_bulk" application/x-ndjson "$sent")" || {
-      dbg_add DBG_BULK "$_dbg"
       warn "bulk request failed with HTTP $code"
       return 1
     }
-    dbg_add DBG_BULK "$_dbg"
     counts="$(parse_bulk "$RESP" "$sent" "$retry_file" "$DEADLETTER")"
     ok="$(echo "$counts" | awk '{print $1}')"
     retry="$(echo "$counts" | awk '{print $2}')"
@@ -510,7 +386,7 @@ bulk_send() {
 # value even with refresh_interval unset. A search-based read could miss a
 # recent write and journal a stale pre-image.
 journal_preimage() {
-  local idfile="$1" op="${2:-delta}" part seq n _dbg
+  local idfile="$1" op="${2:-delta}" part seq n
   [ -s "$idfile" ] || return 0
   # Batched by MGET_BATCH, not PAGE_SIZE: a _mget returns the full _source of
   # every id asked for, so one request per page would hand jq a 110 MB response
@@ -523,10 +399,8 @@ journal_preimage() {
   for part in "$PARTS"/preimage.*; do
     [ -s "$part" ] || continue
     id_list_body "$part" "$WORK/journal.mget.json" mget
-    _dbg="$(dbg_t0)"
     es6 POST "$ES6_URL/$DST_INDEX/_doc/_mget" application/json "$WORK/journal.mget.json" >/dev/null \
       || { warn "pre-image _mget failed -- refusing to write without a journal"; return 1; }
-    dbg_add DBG_JOURNAL "$_dbg"
     state_load
     seq="${JOURNAL_SEQ:-0}"
     # Row layout "seq \t id \t op \t found \t source". Absent documents
@@ -543,22 +417,47 @@ journal_preimage() {
   return 0
 }
 
-# ------------------------------------------------------------------ phase 0 --
+# ------------------------------------------------------- alias resolution --
+resolve_one() {
+  local fn="$1" url="$2" name="$3" label="$4" backing n
+  RESOLVED=""
+  if ! "$fn" GET "$url/_alias/$name" >/dev/null 2>&1; then
+    RESOLVED="$name"; log "   $label: $name is a concrete index"; return 0
+  fi
+  backing="$(jq -r --arg a "$name" \
+    'to_entries | map(select(.value.aliases | has($a))) | map(.key) | .[]' "$RESP")"
+  if [ -z "$backing" ]; then
+    RESOLVED="$name"; log "   $label: $name is a concrete index"; return 0
+  fi
+  n="$(printf '%s\n' "$backing" | wc -l | tr -d ' ')"
+  [ "$n" -eq 1 ] || die "alias $name spans $n indices ($(printf '%s' "$backing" | tr '\n' ' ')).
+Point it at exactly one index, or pass that index name directly."
+  RESOLVED="$backing"
+  log "   $label: alias $name -> $RESOLVED"
+  return 0
+}
 
-phase_preflight() {
-  log "== phase 0: preflight =="
-
+resolve_aliases() {
   for bin in curl jq python3 awk sort comm gzip split; do
     command -v "$bin" >/dev/null 2>&1 || die "missing required tool: $bin"
   done
   [ -n "$ES6_PW" ] || die "set ELASTIC_PW (or ES6_PW)"
   [ -n "$ES9_PW" ] || die "set ELASTIC_PW (or ES9_PW)"
-
   es9 GET "$ES9_URL/" >/dev/null || die "cannot reach/authenticate ES9 at $ES9_URL"
   es6 GET "$ES6_URL/" >/dev/null || die "cannot reach/authenticate ES6 at $ES6_URL"
+
+  resolve_one es9 "$ES9_URL" "$SRC_INDEX" ES9; SRC_INDEX="$RESOLVED"
+  resolve_one es6 "$ES6_URL" "$DST_INDEX" ES6; DST_INDEX="$RESOLVED"
+}
+
+# ------------------------------------------------------------------ phase 0 --
+
+phase_preflight() {
+  log "== phase 0: preflight (delta field: $TS_FIELD) =="
+
   es9 GET "$ES9_URL/$SRC_INDEX/_count" >/dev/null || die "ES9 index $SRC_INDEX not found"
   es6 GET "$ES6_URL/$DST_INDEX/_count" >/dev/null || die "ES6 index $DST_INDEX not found"
-  log "   ES9 and ES6 reachable, both indices present"
+  log "   both indices present"
 
   # Two weeks idle is long enough for ES6 to have hit the flood-stage disk
   # watermark and blocked itself. Every write below would fail one at a
@@ -602,28 +501,28 @@ phase_preflight() {
   # twice is cheap and catches writers nobody remembered to stop.
   local count_first count_second maxts_first maxts_second
   es9 GET "$ES9_URL/$SRC_INDEX/_count" >/dev/null || die "count failed"
-  count_first="$(jq -r '.count' "$RESP")"; maxts_first="$(src_max_updated_at)"
-  log "   freeze sample 1: count=$count_first max(updated_at)=$maxts_first -- waiting ${FREEZE_WAIT}s"
+  count_first="$(jq -r '.count' "$RESP")"; maxts_first="$(src_max_ts)"
+  log "   freeze sample 1: count=$count_first max($TS_FIELD)=$maxts_first -- waiting ${FREEZE_WAIT}s"
   sleep "$FREEZE_WAIT"
   es9 GET "$ES9_URL/$SRC_INDEX/_count" >/dev/null || die "count failed"
-  count_second="$(jq -r '.count' "$RESP")"; maxts_second="$(src_max_updated_at)"
+  count_second="$(jq -r '.count' "$RESP")"; maxts_second="$(src_max_ts)"
   if [ "$count_first" != "$count_second" ] || [ "$maxts_first" != "$maxts_second" ]; then
-    die "ES9 is still taking writes (count $count_first->$count_second, max updated_at $maxts_first->$maxts_second).
+    die "ES9 is still taking writes (count $count_first->$count_second, max $TS_FIELD $maxts_first->$maxts_second).
 Stop the writers first, or both the delta window and the id diff are
 computed against a moving target."
   fi
   log "   freeze verified: ES9 static over ${FREEZE_WAIT}s"
 
-  # Outputs of this phase, read by cmd_run and cmd_plan.
+  # Outputs of this phase, read by cmd_run.
   PREFLIGHT_CUTOVER_AT="$cutover"
   PREFLIGHT_SINCE="$effective"
   PREFLIGHT_SRC_COUNT="$count_second"
 }
 
-src_max_updated_at() {
-  jq -n '{size: 0, aggs: {m: {max: {field: "updated_at"}}}}' >"$WORK/preflight.maxagg.json"
+src_max_ts() {
+  jq -n --arg f "$TS_FIELD" '{size: 0, aggs: {m: {max: {field: $f}}}}' >"$WORK/preflight.maxagg.json"
   es9 POST "$ES9_URL/$SRC_INDEX/_search" application/json "$WORK/preflight.maxagg.json" >/dev/null \
-    || die "max(updated_at) aggregation failed on $SRC_INDEX"
+    || die "max($TS_FIELD) aggregation failed on $SRC_INDEX"
   jq -r '.aggregations.m.value_as_string // (.aggregations.m.value | tostring)' "$RESP"
 }
 
@@ -638,10 +537,9 @@ src_max_updated_at() {
 # ------------------------------------------------------------------ phase 1 --
 
 phase_delta() {
-  log "== phase 1: delta sync $SRC_INDEX -> $DST_INDEX =="
-  dbg_phase_start
+  log "== phase 1: delta sync $SRC_INDEX -> $DST_INDEX on $TS_FIELD =="
   state_load
-  local since="$EFFECTIVE_SINCE" pit="" _dbg
+  local since="$EFFECTIVE_SINCE" pit=""
   local synced="${SYNCED:-0}" seen="${SEEN:-0}" deadletters="${DL_COUNT:-0}"
   # `gt` on the first pass; a restart after a PIT expiry switches to `gte` so
   # the whole group sharing the watermark timestamp is re-scanned. With `gt`,
@@ -663,11 +561,8 @@ phase_delta() {
       exit 130
     fi
 
-    dbg_page_start
     delta_page_body "$pit" "$since" "$WORK/delta.request.json" "$CURSOR_FILE" "$range_op"
-    _dbg="$(dbg_t0)"
     if ! es9 POST "$ES9_URL/_search" application/json "$WORK/delta.request.json" >/dev/null; then
-      dbg_add DBG_SEARCH "$_dbg"
       # An expired PIT (or a node restart) shows up as search_context_missing.
       # ES9 is frozen, so reopening and restarting from the last committed
       # watermark is exactly right: the overlap rewrites identical content.
@@ -687,7 +582,6 @@ phase_delta() {
       }
       die "delta search failed: $(head -c 200 "$RESP")"
     fi
-    dbg_add DBG_SEARCH "$_dbg"
 
     if [ "$seen" -eq 0 ] && [ ! -s "$CURSOR_FILE" ]; then
       state_set TOTAL_HITS "$(jq -r '.hits.total.value // .hits.total' "$RESP")"
@@ -720,12 +614,10 @@ phase_delta() {
     # it earlier would let a crash skip the page entirely.
     mv -f "$WORK/delta.cursor.next.json" "$CURSOR_FILE"
     log "   page: $hits docs (seen=$seen synced=$synced deadletter=$deadletters)"
-    dbg_page_end "$hits"
   done
 
   pit_close "$ES9_URL" "$pit"; rm -f "$PIT_FILE" "$CURSOR_FILE"
   es6 POST "$ES6_URL/$DST_INDEX/_refresh" >/dev/null || warn "refresh failed"
-  dbg_phase_end "phase 1"
   log "   delta sync finished: seen=$seen synced=$synced deadletter=$deadletters"
   state_set PHASE DELTA_DONE
 }
@@ -808,36 +700,40 @@ id_walk_body() {
   ' >"$out"
 }
 
+# The only progress signal in the longest phase of a run. Every PROGRESS_EVERY
+# pages, one line per walker; PROGRESS_EVERY=0 turns it off.
+walk_progress() {
+  [ "${PROGRESS_EVERY:-0}" -gt 0 ] || return 0
+  [ $(( $2 % PROGRESS_EVERY )) -eq 0 ] || return 0
+  log "   $1 id walk: $3 ids so far"
+}
+
 # Walk one PIT slice into its own file. Runs inside a subshell that has already
 # pointed RESP at a private file, and every file it touches is named after the
 # slice -- otherwise concurrent slices overwrite each other.
 walk_pit_slice() {
   local pit="$1" sid="$2" smax="$3" out="$4" tag="$5"
-  local reqf="$WORK/ids.src.$sid.request" cursor="" n _d _pages=0
+  local reqf="$WORK/ids.src.$sid.request" cursor="" n pages=0 ids=0
   : >"$out"
-  dbg_export_reset
   while :; do
     [ "$INTERRUPTED" -eq 1 ] && return 130
-    _d="$(dbg_t0)"; id_walk_body "$pit" "$cursor" "$sid" "$smax" "$reqf"; dbg_add DBG_EXP_BODY "$_d"
+    id_walk_body "$pit" "$cursor" "$sid" "$smax" "$reqf"
 
-    _d="$(dbg_t0)"
     es9 POST "$ES9_URL/_search" application/json "$reqf" >/dev/null || {
       [ "$INTERRUPTED" -eq 1 ] && return 130
       warn "$tag id export failed: $(head -c 200 "$RESP")"
       return 1
     }
-    dbg_add DBG_EXP_HTTP "$_d"
 
-    _d="$(dbg_t0)"; n="$(jq '.hits.hits | length' "$RESP")"; dbg_add DBG_EXP_COUNT "$_d"
+    n="$(jq '.hits.hits | length' "$RESP")"
     [ "$n" -eq 0 ] && break
 
-    _d="$(dbg_t0)"; jq -r '.hits.hits[]._id' "$RESP" >>"$out"; dbg_add DBG_EXP_WRITE "$_d"
-    _d="$(dbg_t0)"; cursor="$(jq -c '.hits.hits[-1].sort' "$RESP")"; dbg_add DBG_EXP_CURSOR "$_d"
+    jq -r '.hits.hits[]._id' "$RESP" >>"$out"
+    cursor="$(jq -c '.hits.hits[-1].sort' "$RESP")"
 
-    _pages=$((_pages + 1)); DBG_EXP_IDS=$((DBG_EXP_IDS + n))
-    dbg_export_tick "$tag" "$_pages"
+    pages=$((pages + 1)); ids=$((ids + n))
+    walk_progress "$tag" "$pages" "$ids"
   done
-  dbg_export_summary "$tag" "$_pages"
   return 0
 }
 
@@ -846,9 +742,8 @@ walk_pit_slice() {
 # request before the next one overwrites it.
 walk_scroll_slice() {
   local sid="$1" smax="$2" out="$3" tag="$4"
-  local reqf="$WORK/ids.dst.$sid.request" cur n _d _pages=0
+  local reqf="$WORK/ids.dst.$sid.request" cur n pages=0 ids=0
   : >"$out"
-  dbg_export_reset
   jq -n --argjson size "$PAGE_SIZE" --argjson i "$sid" --argjson m "$smax" '
       { size: $size, sort: ["_doc"], _source: false, query: {match_all: {}} }
     + (if $m > 1 then { slice: {id: $i, max: $m} } else {} end)' >"$reqf"
@@ -858,22 +753,16 @@ walk_scroll_slice() {
 
   while :; do
     [ "$INTERRUPTED" -eq 1 ] && return 130
-    _d="$(dbg_t0)"
     n="$(jq '.hits.hits | length' "$RESP")"
     cur="$(jq -r '._scroll_id // ""' "$RESP")"
-    dbg_add DBG_EXP_COUNT "$_d"
     [ "$n" -eq 0 ] && break
 
-    _d="$(dbg_t0)"; jq -r '.hits.hits[]._id' "$RESP" >>"$out"; dbg_add DBG_EXP_WRITE "$_d"
-
-    _d="$(dbg_t0)"
+    jq -r '.hits.hits[]._id' "$RESP" >>"$out"
     jq -n --arg s "$cur" '{scroll: "15m", scroll_id: $s}' >"$reqf"
-    dbg_add DBG_EXP_BODY "$_d"
 
-    _pages=$((_pages + 1)); DBG_EXP_IDS=$((DBG_EXP_IDS + n))
-    dbg_export_tick "$tag" "$_pages"
+    pages=$((pages + 1)); ids=$((ids + n))
+    walk_progress "$tag" "$pages" "$ids"
 
-    _d="$(dbg_t0)"
     es6 POST "$ES6_URL/_search/scroll" application/json "$reqf" >/dev/null || {
       [ "$INTERRUPTED" -eq 1 ] && return 130
       # A scroll cannot be resumed from the middle, and a truncated export
@@ -881,9 +770,7 @@ walk_scroll_slice() {
       warn "$tag scroll context lost mid-export"
       return 1
     }
-    dbg_add DBG_EXP_HTTP "$_d"
   done
-  dbg_export_summary "$tag" "$_pages"
   jq -n --arg s "$cur" '{scroll_id: [$s]}' >"$reqf"
   es6 DELETE "$ES6_URL/_search/scroll" application/json "$reqf" >/dev/null 2>&1 || true
   return 0
@@ -897,9 +784,8 @@ walk_scroll_slice() {
 # that died quietly leaves the output short, which the count guard in
 # phase_reconcile catches.
 export_ids() {
-  local side="$1" out="$2" pit="" i rc=0 t0
+  local side="$1" out="$2" pit="" i rc=0
   local pids=()
-  t0="$(dbg_t0)"
 
   if [ "$side" = "src" ]; then
     resolve_slices es9 "$ES9_URL" "$SRC_INDEX" ES9
@@ -929,13 +815,12 @@ export_ids() {
 
   sort -u -T "$WORK" -S 25% -o "$out" "$WORK"/ids."$side".*.ids
   rm -f "$WORK"/ids."$side".*
-  dbg_export_total "$side" "$t0" "$out" "$SLICE_COUNT"
+  log "   $side id walk done: $(wc -l <"$out" | tr -d ' ') ids"
   return 0
 }
 
 phase_reconcile() {
   log "== phase 3: reconcile deletes =="
-  dbg_phase_start
   state_load
   es6 POST "$ES6_URL/$DST_INDEX/_refresh" >/dev/null || warn "ES6 refresh failed"
   es9 POST "$ES9_URL/$SRC_INDEX/_refresh" >/dev/null || warn "ES9 refresh failed"
@@ -947,11 +832,11 @@ phase_reconcile() {
   dst_count="$(jq -r '.count' "$RESP")"
   log "   counts before reconcile: $SRC_INDEX=$src_count $DST_INDEX=$dst_count"
 
-  local _dbg
+  local
   log "   exporting live ids from ES9/$SRC_INDEX"
-  _dbg="$(dbg_t0)"; export_ids src "$STATE_DIR/es9_ids.sorted"; dbg_step "ES9 id export" "$_dbg"
+  export_ids src "$STATE_DIR/es9_ids.sorted"
   log "   exporting live ids from ES6/$DST_INDEX"
-  _dbg="$(dbg_t0)"; export_ids dst "$STATE_DIR/es6_ids.sorted"; dbg_step "ES6 id export" "$_dbg"
+  export_ids dst "$STATE_DIR/es6_ids.sorted"
 
   local src_id_count dst_id_count
   src_id_count="$(wc -l <"$STATE_DIR/es9_ids.sorted" | tr -d ' ')"
@@ -998,7 +883,6 @@ this really is what happened on ES9."
   es6 POST "$ES6_URL/$DST_INDEX/_refresh" >/dev/null || warn "refresh failed"
   state_set DELETED "$delete_count"; state_set REPAIRED "$repair_count"
   state_set PHASE RECONCILE_DONE
-  dbg_phase_end "phase 3"
   log "   reconcile done: deleted=$delete_count repaired=$repair_count"
 }
 
@@ -1236,29 +1120,10 @@ repaired       : ${REPAIRED:-0}
 journal rows   : ${JOURNAL_SEQ:-0}   ($JOURNAL)
 EOF
   case "$PHASE" in
-    DELTA_SYNC|DELTA_DONE|GATE_PASSED) echo "next           : ./es_rollback.sh resume" ;;
-    RECONCILE_DONE)                    echo "next           : ./es_rollback.sh verify" ;;
+    DELTA_SYNC|DELTA_DONE|GATE_PASSED) echo "next           : ./es_rollback_py.sh resume" ;;
+    RECONCILE_DONE)                    echo "next           : ./es_rollback_py.sh verify" ;;
     DONE)                              echo "next           : flip traffic to ES6, then 'reset'" ;;
   esac
-}
-
-cmd_plan() {
-  phase_preflight
-  jq -n --arg s "$PREFLIGHT_SINCE" '{query: {range: {updated_at: {gt: $s}}}}' >"$WORK/plan.count.json"
-  es9 POST "$ES9_URL/$SRC_INDEX/_count" application/json "$WORK/plan.count.json" >/dev/null \
-    || die "count failed"
-  local delta dst_count; delta="$(jq -r '.count' "$RESP")"
-  es6 GET "$ES6_URL/$DST_INDEX/_count" >/dev/null || die "count failed"
-  dst_count="$(jq -r '.count' "$RESP")"
-  cat <<EOF
-
-plan (nothing written)
-  ES9 $SRC_INDEX total      : $PREFLIGHT_SRC_COUNT
-  ES6 $DST_INDEX total      : $dst_count
-  delta since $PREFLIGHT_SINCE : $delta doc(s) to copy
-  net count difference      : $((PREFLIGHT_SRC_COUNT - dst_count))
-  journal (approx, gzip)    : $(( (delta * 292) / 1048576 )) MiB
-EOF
 }
 
 cmd_reset() {
@@ -1285,9 +1150,14 @@ main() {
   # Deferred so a page in flight finishes and checkpoints instead of being
   # torn in half. Worst case one page is redone on resume.
   trap 'INTERRUPTED=1; echo; echo ">> interrupt received, finishing current page..."' INT TERM
+  # Every command that touches a cluster works on the concrete index, not the
+  # alias -- including resume and undo, which never run preflight. status and
+  # reset read local files only, so they stay offline.
+  case "${1:-}" in
+    preflight|run|resume|verify|undo) resolve_aliases ;;
+  esac
   case "${1:-}" in
     preflight) phase_preflight; log "preflight OK" ;;
-    plan)      cmd_plan ;;
     run)       cmd_run ;;
     resume)    cmd_resume ;;
     status)    cmd_status ;;
@@ -1298,7 +1168,7 @@ main() {
   esac
 }
 
-# Sourceable for testing: `ES_ROLLBACK_LIB=1 . es_rollback.sh` loads the
+# Sourceable for testing: `ES_ROLLBACK_LIB=1 . es_rollback_py.sh` loads the
 # helpers without running a command.
 if [ "${ES_ROLLBACK_LIB:-}" != "1" ]; then
   main "$@"

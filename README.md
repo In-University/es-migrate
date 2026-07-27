@@ -326,3 +326,9 @@ ELASTIC_PW='elastic' \
 ES6_URL="http://${ES6_EXT}:9200" ES9_URL="http://${ES9_EXT}:9200" \
 ELASTIC_PW='elastic' \
 ./reconcile_deletes.sh
+
+export STATE_DIR=/data/rollback
+export ES6_URL=http://10.146.0.10:9200
+export ES9_URL=http://10.146.0.11:9200
+export ELASTIC_PW='elastic'
+DEBUG_TIMING=1 ./es_rollback.sh preflight

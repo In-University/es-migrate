@@ -9,3 +9,4 @@ __pycache__/
 # es_rollback.sh run state (checkpoints, journal, id exports) and its tests
 .rollback-state/
 **/rollback/
+**/rollback-*/
