@@ -280,12 +280,13 @@ PY
 # Classify a _bulk response. ES answers 200 even when individual items
 # failed, so discarding the body silently drops documents while reporting
 # success. Splits into a retry set and a dead letter file; prints
-# "<ok> <retry> <fatal>".
+# "<ok> <retry> <fatal> <exhausted>".
 parse_bulk() {
-  local resp="$1" sent="$2" retry_out="$3" dl="$4"
-  python3 - "$resp" "$sent" "$retry_out" "$dl" <<'PY'
+  local resp="$1" sent="$2" retry_out="$3" dl="$4" final="${5:-0}" tag="${6:-bulk}"
+  python3 - "$resp" "$sent" "$retry_out" "$dl" "$final" "$tag" <<'PY'
 import json, sys
-resp, sent, retry_out, dl = sys.argv[1:5]
+resp, sent, retry_out, dl, final, tag = sys.argv[1:7]
+final = final == '1'
 RETRY_ST = {429, 502, 503, 504}
 RETRY_ET = ('es_rejected_execution', 'circuit_breaking', 'cluster_block', 'unavailable_shards')
 # Bulk item n -> its action line and, for index ops, its source line.
@@ -296,25 +297,28 @@ with open(sent, encoding='utf-8') as f:
         if not a: continue
         if a.lstrip().startswith('{"delete"'): pairs.append((a, None))
         else: pairs.append((a, next(f, '').rstrip('\n') or None))
-ok = retry = fatal = 0
+ok = retry = fatal = exhausted = 0
 with open(retry_out, 'w', encoding='utf-8') as rf, open(dl, 'a', encoding='utf-8') as df:
     for i, item in enumerate(json.load(open(resp, encoding='utf-8')).get('items', [])):
         op, b = next(iter(item.items()))
         st = b.get('status', 200); err = b.get('error') or {}
         et = err.get('type', '') if isinstance(err, dict) else ''
         act, src = pairs[i] if i < len(pairs) else (None, None)
-        if st < 300 or (op == 'delete' and st == 404): ok += 1
-        elif st in RETRY_ST or any(k in et for k in RETRY_ET):
+        if st < 300 or (op == 'delete' and st == 404): ok += 1; continue
+        transient = st in RETRY_ST or any(k in et for k in RETRY_ET)
+        if transient and not final:
             retry += 1
             rf.write(act + '\n')
             if src: rf.write(src + '\n')
-        else:
-            fatal += 1
-            df.write(json.dumps({'_id': b.get('_id', ''), 'status': st, 'error': err,
-                                 'action': json.loads(act) if act else None,
-                                 'source': json.loads(src) if src else None},
-                                ensure_ascii=False) + '\n')
-print(ok, retry, fatal)
+            continue
+        if transient: exhausted += 1
+        else: fatal += 1
+        df.write(json.dumps({'_id': b.get('_id', ''), 'tag': tag, 'status': st, 'error': err,
+                             'retry_exhausted': transient,
+                             'action': json.loads(act) if act else None,
+                             'source': json.loads(src) if src else None},
+                            ensure_ascii=False) + '\n')
+print(ok, retry, fatal, exhausted)
 PY
 }
 
@@ -350,28 +354,23 @@ pit_close() {
 # bulk.retry.ndjson -- parse_bulk truncates the retry file before reading what
 # was sent.
 bulk_send() {
-  local file="$1" attempt=0
-  local sent="$file" retry_file="$WORK/bulk.retry.ndjson"
+  local file="$1" attempt=0 final=0
+  local sent="$file" retry_file="$WORK/bulk.retry.ndjson" tag="${BULK_TAG:-bulk}"
   BULK_APPLIED=0; BULK_DEADLETTERED=0
   while :; do
-    local code counts ok retry fatal
+    local code counts ok retry fatal exhausted
+    [ "$attempt" -ge "$((MAX_RETRY - 1))" ] && final=1
     code="$(es6 POST "$ES6_URL/$DST_INDEX/_doc/_bulk" application/x-ndjson "$sent")" || {
       warn "bulk request failed with HTTP $code"
       return 1
     }
-    counts="$(parse_bulk "$RESP" "$sent" "$retry_file" "$DEADLETTER")"
-    ok="$(echo "$counts" | awk '{print $1}')"
-    retry="$(echo "$counts" | awk '{print $2}')"
-    fatal="$(echo "$counts" | awk '{print $3}')"
-    BULK_APPLIED=$((BULK_APPLIED + ok)); BULK_DEADLETTERED=$((BULK_DEADLETTERED + fatal))
+    counts="$(parse_bulk "$RESP" "$sent" "$retry_file" "$DEADLETTER" "$final" "$tag")"
+    read -r ok retry fatal exhausted <<<"$counts"
+    BULK_APPLIED=$((BULK_APPLIED + ok))
+    BULK_DEADLETTERED=$((BULK_DEADLETTERED + fatal + exhausted))
+    [ "$exhausted" -gt 0 ] && warn "$exhausted item(s) still rejected after $MAX_RETRY attempts -- dead-lettered"
     [ "$retry" -eq 0 ] && return 0
     attempt=$((attempt + 1))
-    if [ "$attempt" -ge "$MAX_RETRY" ]; then
-      warn "$retry item(s) still rejected after $MAX_RETRY attempts -- dead-lettering"
-      cat "$retry_file" >>"$DEADLETTER"
-      BULK_DEADLETTERED=$((BULK_DEADLETTERED + retry))
-      return 0
-    fi
     warn "$retry item(s) rejected (transient) -- retry $attempt/$MAX_RETRY"
     sleep "$(backoff "$attempt")"
     sent="$WORK/bulk.send.ndjson"
@@ -539,7 +538,7 @@ src_max_ts() {
 phase_delta() {
   log "== phase 1: delta sync $SRC_INDEX -> $DST_INDEX on $TS_FIELD =="
   state_load
-  local since="$EFFECTIVE_SINCE" pit=""
+  local since="$EFFECTIVE_SINCE" pit="" BULK_TAG=delta
   local synced="${SYNCED:-0}" seen="${SEEN:-0}" deadletters="${DL_COUNT:-0}"
   # `gt` on the first pass; a restart after a PIT expiry switches to `gte` so
   # the whole group sharing the watermark timestamp is re-scanned. With `gt`,
@@ -887,7 +886,7 @@ this really is what happened on ES9."
 }
 
 reconcile_deletes() {
-  local idfile="$1" total="$2" applied=0 part
+  local idfile="$1" total="$2" applied=0 part BULK_TAG=delete
   log "   deleting $total doc(s) from ES6 (journaling pre-images first)"
   rm -f "$PARTS"/delete.*
   split -l "$MGET_BATCH" -a 5 "$idfile" "$PARTS/delete."
@@ -906,7 +905,7 @@ reconcile_deletes() {
 }
 
 reconcile_repairs() {
-  local idfile="$1" applied=0 part seq n
+  local idfile="$1" applied=0 part seq n BULK_TAG=repair
   rm -f "$PARTS"/repair.*
   split -l "$MGET_BATCH" -a 5 "$idfile" "$PARTS/repair."
   for part in "$PARTS"/repair.*; do
@@ -1025,7 +1024,7 @@ cmd_undo() {
 
   rm -f "$PARTS"/undo.*
   split -l "$MGET_BATCH" -a 5 "$WORK/undo.rows.tsv" "$PARTS/undo."
-  local part applied=0
+  local part applied=0 BULK_TAG=undo
   for part in "$PARTS"/undo.*; do
     [ -s "$part" ] || continue
     # Row layout is seq/id/op/found/source. `op` is audit metadata; undo keys
