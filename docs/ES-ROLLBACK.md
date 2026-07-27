@@ -277,7 +277,7 @@ Vòng lặp, mỗi page làm đúng thứ tự này và **thứ tự là bất b
 search ES9 (PIT + search_after)
   -> _mget pre-image từ ES6      (theo lô MGET_BATCH)
   -> ghi journal
-  -> bulk vào ES6                (chia theo MAX_BULK_BYTES, song song WORKERS)
+  -> bulk vào ES6                (chia thành chunk ≤ 5 MB, tuần tự)
   -> cập nhật bộ đếm vào state
   -> đẩy con trỏ search_after
 ```
@@ -303,32 +303,6 @@ Chỉ qua khi **cả hai** đúng:
 
 Không qua thì dừng hẳn. `ALLOW_PARTIAL=true` bỏ qua điều kiện thứ hai, và
 khi đó công cụ cảnh báo rõ ràng.
-
-### Quét ID: doc_values thay vì stored fields
-
-`_source: false` **không** làm việc quét ID rẻ đi. `_id` vẫn được lấy trong
-fetch phase từ stored fields — một lượt đọc theo hàng cho mỗi hit. Đo trên
-cluster benchmark, một page 5000 hit:
-
-| | Lạnh | Nóng |
-|---|---|---|
-| `_id` từ stored fields | 0,340 s | 0,163 s |
-| `ID_FIELD` từ doc_values | **0,114 s** | **0,038 s** |
-
-Nhanh hơn 3–4× vì doc_values là cột, đọc tuần tự và thân thiện page cache.
-
-Nhưng đọc sai ID không phải lỗi hiệu năng — pha 3 sẽ so nhầm tập ID và
-**xoá nhầm document**. Nên công cụ không tin, mà chứng minh, hai lớp:
-
-1. **Trước khi quét**, lấy mẫu 100 doc và hỏi *cả* `_id` lẫn `ID_FIELD`. Chỉ
-   dùng doc_values khi **mọi** doc mẫu có field đơn trị và trùng khít `_id`.
-   Field thiếu, đa trị, hay chỉ gần giống đều bị từ chối — tự động quay về
-   `_id`, có ghi log. Kiểm tra riêng cho từng cluster.
-2. **Sau khi quét**, quét lại file ID tìm dòng `null` hoặc rỗng. Mẫu 100 doc
-   không chứng minh được cho 8M; doc nào thiếu field sẽ cho ra `null`, và
-   công cụ dừng thay vì đem `null` đi so sánh.
-
-Tắt hẳn bằng `ID_FIELD=`.
 
 ### Pha 3 — RECONCILE
 
@@ -478,7 +452,7 @@ thô và **~190 B sau gzip** (nén 5,7 lần).
 |---|---|
 | `PAGE_SIZE` | Số doc giữ trong RAM cùng lúc ở pha 1. Đây là tham số chi phối bộ nhớ. |
 | `MGET_BATCH` | Số ID mỗi request đọc pre-image. **Độc lập với `PAGE_SIZE`.** |
-| `MAX_BULK_BYTES` | Trần kích thước mỗi request `_bulk`. |
+| `BULK_BYTE_CAP` | Trần kích thước mỗi request `_bulk`. Hằng số 5 MB trong script, không phải env var — đúng khuyến nghị của Elastic và chưa từng có lý do đổi. |
 
 ### Vì sao `MGET_BATCH` tách rời `PAGE_SIZE`
 
@@ -496,7 +470,7 @@ cả page trong một request, với `PAGE_SIZE=100000`:
 Tổng khoảng **1,2 GB RSS cho một page**, tuyến tính theo `PAGE_SIZE`. Không
 có lỗi cứng nào — request nhỏ, ES không giới hạn kích thước response, vài
 giây là xong — nên nó **âm thầm ngốn RAM** chứ không fail. Đường ghi đã có
-`MAX_BULK_BYTES` chặn; `MGET_BATCH` làm điều tương tự cho đường đọc.
+`BULK_BYTE_CAP` chặn; `MGET_BATCH` làm điều tương tự cho đường đọc.
 
 Mặc định `MGET_BATCH=1000` giữ mỗi response ở khoảng 1 MB bất kể `PAGE_SIZE`.
 Không có lý do gì để tăng.
@@ -518,25 +492,45 @@ pha 1 chậm thêm khoảng **30–50%** so với không journal.
 
 ## 9. Bảng biến môi trường
 
+Script chia thành ba tầng đúng theo thứ tự bạn có việc phải sửa tới chúng.
+Chỉ tầng đầu là thứ phải nhìn mỗi lần chạy.
+
+**Tầng 1 — kết nối** (luôn phải set cho một lần chạy thật)
+
 | Biến | Mặc định | Ghi chú |
 |---|---|---|
 | `ES6_URL` / `ES9_URL` | `http://localhost:9200` | |
-| `SRC_INDEX` / `DST_INDEX` | `bench-es9` / `bench-es6` | |
+| `SRC_INDEX` / `DST_INDEX` | `bench-es9` / `bench-es6` | Nguồn là ES9, đích là ES6 |
 | `ES6_USER` / `ES6_PW` | `elastic` / `$ELASTIC_PW` | |
 | `ES9_USER` / `ES9_PW` | `elastic` / `$ELASTIC_PW` | |
-| `STATE_DIR` | `./.rollback-state` | Chứa cả journal — xem §3c |
+| `STATE_DIR` | `./.rollback-state` | Chứa cả journal — xem §3c và §12 |
+
+**Tầng 2 — hiệu năng** (chỉ khi chạy chậm hoặc hết RAM)
+
+| Biến | Mặc định | Ghi chú |
+|---|---|---|
 | `PAGE_SIZE` | `10000` | Chi phối bộ nhớ pha 1. 10000 là trần của `index.max_result_window` |
-| `MGET_BATCH` | `1000` | ID mỗi request đọc pre-image |
-| `ID_FIELD` | `id` | Field keyword song hành `_id`, đọc từ doc_values khi quét ID. `""` để tắt |
-| `MAX_BULK_BYTES` | `5000000` | Trần mỗi request `_bulk` |
+| `MGET_BATCH` | `1000` | ID mỗi request đọc pre-image, và mỗi lô ở bước xoá/vá |
+| `SLICES` | `auto` | Số slice song song khi quét ID. `auto` = mỗi shard một slice, `1` để tắt |
+| `MAX_RETRY` | `6` | Số lần retry HTTP |
+
+**Tầng 3 — an toàn.** Ba biến cuối *tắt* một guard, đọc pha tương ứng trước khi dùng.
+
+| Biến | Mặc định | Ghi chú |
+|---|---|---|
 | `SAFETY_MARGIN` | `300` | Giây lùi khỏi `cutover_at` |
 | `MAX_DELETE_RATIO` | `0.10` | Chặn nếu số xoá vượt tỉ lệ này của ES6 |
-| `MAX_RETRY` | `6` | Số lần retry HTTP |
-| `FREEZE_WAIT` | `30` | Khoảng cách hai mẫu kiểm tra freeze |
+| `FREEZE_WAIT` | `10` | Khoảng cách hai mẫu kiểm tra freeze |
 | `SAMPLE_N` | `1000` | Số doc so nội dung ở pha verify |
 | `SINCE` | *(rỗng)* | Ghi đè `cutover_at` |
 | `ALLOW_PARTIAL` | `false` | Cho gate đi qua dù còn dead-letter |
 | `ASSUME_YES` | `false` | Bỏ qua xác nhận khi vượt `MAX_DELETE_RATIO` |
+
+**Debug** (tạm thời): `DEBUG_TIMING=1` bật các dòng `DEBUG` tách thời gian
+theo từng chặng; `DEBUG_EVERY` (mặc định `50`) là khoảng cách page giữa các
+dòng báo cáo khi quét ID.
+
+`BULK_BYTE_CAP` (5 MB) là hằng số trong script, không phải env var — xem §8.
 
 ---
 
@@ -649,17 +643,75 @@ tiến trình đã chết được nhận diện qua tín hiệu 0.
 
 ## 12. Nội dung `STATE_DIR`
 
-| File | |
+Hai tầng, và phân biệt được hai tầng này là quan trọng khi sự cố:
+
+- **`$STATE_DIR/`** — mọi thứ mà `resume` và `undo` phụ thuộc vào. **Mất là
+  mất khả năng undo.** Đừng xoá tay khi một lần chạy chưa kết thúc.
+- **`$STATE_DIR/work/`** — file tạm. Lần chạy nào cũng có thể xoá sạch, kể cả
+  giữa lúc đang chạy. Xoá thư mục này không làm mất tiến độ (`resume` đọc
+  `state.env`, không đọc `work/`).
+
+### 12.1 Tầng bền — `$STATE_DIR/`
+
+| File | Chức năng |
 |---|---|
-| `state.env` | Pha + các bộ đếm, dạng `key=value` |
-| `journal.tsv.gz` | Pre-image lần chạy hiện tại: `seq/id/op/found/source`, xem §7 |
-| `journal.<ts>.tsv.gz` | Journal của các lần chạy trước, đã lưu trữ |
-| `deadletter.ndjson` | Document ES6 từ chối, kèm lỗi và payload |
-| `es6_ids.sorted` / `es9_ids.sorted` | Đầu vào phép so sánh |
-| `to_delete` / `to_repair` | Kết quả so sánh hai chiều |
-| `verify_extra` / `verify_missing` | Chỉ có khi verify fail |
-| `verify_sample_diff` | ID có nội dung lệch |
-| `run.log` | Log đầy đủ có timestamp |
+| `state.env` | Pha hiện tại + toàn bộ bộ đếm, dạng `key=value` source được bằng bash. Ghi theo kiểu temp+`mv` nên crash không bao giờ để lại file dở. Đây là thứ `resume` đọc để biết đang ở đâu |
+| `journal.tsv.gz` | Pre-image của **lần chạy hiện tại**: `seq/id/op/found/source`, xem §7. Mọi document đều được đọc từ ES6 và ghi vào đây **trước khi** bị ghi đè hoặc xoá — đây là toàn bộ cơ sở của `undo` |
+| `journal.<ts>.tsv.gz` | Journal các lần chạy trước, tự động lưu trữ khi `run` mới bắt đầu. `undo` **không** đọc các file này (seq đánh lại từ 0 mỗi lần chạy nên trộn vào sẽ làm "seq nhỏ nhất mỗi id" mất nghĩa). Muốn phục hồi từ đây phải làm tay |
+| `deadletter.ndjson` | Document ES6 từ chối vĩnh viễn, kèm status, error, action và source gốc. Gate ở pha 2 chặn nếu file này không rỗng |
+| `pit_id.txt` | PIT id của pha 1 đang mở, để `resume` dùng lại thay vì quét lại từ đầu |
+| `search_after.json` | Con trỏ phân trang của pha 1. Chỉ được đẩy lên sau khi page đã bulk xong và bộ đếm đã ghi — xem §"Con trỏ được đẩy sau cùng" |
+| `es9_ids.sorted` / `es6_ids.sorted` | Toàn bộ ID sống của hai bên, đã `sort -u`. Đầu vào của phép `comm` ở pha 3 |
+| `to_delete` / `to_repair` | Kết quả so sánh hai chiều: chỉ có ở ES6 (sẽ xoá) và chỉ có ở ES9 (sẽ vá). **Đọc `to_delete` trước khi dùng `ASSUME_YES`** |
+| `verify_extra` / `verify_missing` | Chỉ sinh ra khi verify fail: ID thừa/thiếu trên ES6 so với ES9 |
+| `verify_sample_diff` | ID mà nội dung `_source` lệch giữa hai bên |
+| `run.log` | Log đầy đủ có timestamp, append qua mọi lần `resume` |
+| `lock/pid` | Chống hai tiến trình chạy song song. Lock của tiến trình đã chết được nhận diện qua tín hiệu 0 và tự thu hồi |
+
+### 12.2 Tầng tạm — `$STATE_DIR/work/`
+
+Tên file theo đúng một quy ước: **`<chủ sở hữu>.<mục đích>.<đuôi>`**, trong đó
+chủ sở hữu là pha hoặc hàm ghi ra nó. Nhờ vậy một glob không bao giờ quét
+trúng file của chủ khác. Mọi output của `split(1)` nằm riêng trong
+`work/parts/`, để glob theo lô (`parts/delete.*`) không thể trúng file có tên
+riêng.
+
+Một thứ chỉ là **file** thay vì pipe khi thuộc đúng một trong hai trường hợp:
+
+1. **Nó là request body của curl.** `http_retry` gửi lại *đúng file đó* sau khi
+   gặp 429/503, mà pipe thì không đọc lại được.
+2. **Nó là con trỏ phải sống sót qua crash**, nên được ghi ra tên tạm rồi `mv`
+   vào chỗ — `mv` trên cùng filesystem là atomic nên không có ghi dở.
+
+Mọi thứ ngoài hai trường hợp trên đều đã là pipe.
+
+| File | Chủ | Chức năng |
+|---|---|---|
+| `http.resp.json` | mọi request | Body của response HTTP gần nhất. Các slice chạy song song mỗi cái trỏ biến này sang file riêng `ids.<side>.<n>.resp` |
+| `delta.request.json` | pha 1 | Body search một page delta (PIT + `search_after` + range) |
+| `delta.page.ids` | pha 1 | Danh sách ID của page, đầu vào cho bước đọc pre-image |
+| `delta.chunk.NNNN.ndjson` | pha 1 | Page đã chia thành các bulk body ≤ 5 MB. Chia theo byte và **theo cặp dòng**, để dòng action không bao giờ bị tách khỏi dòng source của nó |
+| `delta.cursor.next.json` | pha 1 | Con trỏ kế tiếp, ghi tạm ở đây rồi `mv` sang `search_after.json` |
+| `journal.mget.json` | pha 1, 3 | Body `_mget` đọc pre-image từ ES6 |
+| `bulk.send.ndjson` | bulk io | Chỉ sinh ra khi bulk bị từ chối một phần. Lượt đầu gửi thẳng file của caller, không copy |
+| `bulk.retry.ndjson` | bulk io | Các item bị từ chối tạm thời, chờ gửi lại. **Bắt buộc khác path** với `bulk.send.ndjson` vì `parse_bulk` truncate file retry trước khi đọc file đã gửi |
+| `bulk.pairs.tsv` | bulk io | Map thứ tự item trong bulk → dòng action + dòng source, để ghép với verdict từ response |
+| `preflight.maxagg.json` | pha 0 | Body agg `max(updated_at)`, dùng ở hai mẫu kiểm tra freeze |
+| `pit.close.json` | pha 1, 3 | Body đóng PIT |
+| `ids.src.<n>.{request,resp,ids}` | pha 3 | Một bộ cho mỗi slice quét ID trên ES9. Con trỏ `search_after` giữ trong biến shell, không ra file — slice hỏng thì chạy lại cả walk nên không cần bền |
+| `ids.dst.<n>.{request,resp,ids}` | pha 3 | Tương tự cho ES6. `request` dùng chung cho cả body khởi tạo và body scroll — mỗi body đã được request tiêu thụ trước khi body sau ghi lên |
+| `verify.sample.ids` | pha 4 | Mẫu ID ngẫu nhiên (seed cố định 42 nên lặp lại được) |
+| `verify.sample.mget.json` | pha 4 | Body `_mget` cho mẫu, dùng cho cả hai cluster |
+| `verify.sample.src.json` | pha 4 | Bản copy response của ES9. Response ES6 đọc thẳng từ `http.resp.json`, không cần copy thứ hai |
+| `verify.expected.ids` | pha 4 | Tập ID ES6 **đáng lẽ phải có** = (es6 − to_delete) + to_repair |
+| `verify.dst.sorted` | pha 4 | Chỉ có khi tập trên không khớp: ID ES6 quét lại để khoanh vùng lệch |
+| `plan.count.json` | `plan` | Body count phạm vi delta |
+| `undo.rows.tsv` | `undo` | Journal đã giải nén và lọc còn seq nhỏ nhất mỗi ID |
+| `undo.bulk.ndjson` | `undo` | Bulk body phục hồi: `index` nếu `found=1`, `delete` nếu `found=0` |
+| `parts/preimage.*` | pha 1, 3 | Lô ID `MGET_BATCH` dòng để đọc pre-image |
+| `parts/delete.*` | pha 3 | Lô ID cần xoá |
+| `parts/repair.*` | pha 3 | Lô ID cần vá |
+| `parts/undo.*` | `undo` | Lô dòng journal cần replay |
 
 ---
 

@@ -36,6 +36,10 @@ migrate users. TLS is left off (plain HTTP) — throwaway benchmark on a private
   `terraform/rollback/main.tf`). Raise your quota at
   console.cloud.google.com/iam-admin/quotas if even the small node doesn't fit
 
+## Operations monitoring
+Both VM startup scripts install and start the Google Cloud Ops Agent. Ensure the
+attached VM service account can write logs and monitoring metrics to the project.
+
 ## 0. Network layer (apply once)
 `terraform/network/` owns the VPC, subnet, and the two reserved internal IPs
 in its **own state**, independent of the benchmark VMs. Apply it once; you
@@ -72,7 +76,7 @@ gcloud compute scp --zone=asia-northeast1-a --recurse scripts es6-source:/home/A
 gcloud compute ssh es6-source --zone=asia-northeast1-a
 # on the VM (ES_PW is required now that security is on):
 cd ~/scripts
-ES_PW='<elastic_password>' python3 generate_es6.py   # tune with WORKERS=, BATCH=, TOTAL=
+ES_PW='elastic' python3 generate_es6.py   # tune with WORKERS=, BATCH=, TOTAL=
 ```
 Ends with `final _count = 8000000`.
 
@@ -84,7 +88,7 @@ gcloud compute scp --zone=asia-northeast1-b --recurse scripts es9-dest:/home/ADM
 gcloud compute ssh es9-dest --zone=asia-northeast1-b
 # on the VM (ELASTIC_PW auths both the ES9 API and ES9's pull from ES6):
 cd ~/scripts
-ELASTIC_PW='<elastic_password>' ./reindex_remote.sh   # single remote reindex ES6 -> ES9
+ELASTIC_PW='elastic' ./reindex_remote.sh   # single remote reindex ES6 -> ES9
 ```
 It pre-creates `bench-es9`, triggers the async reindex, polls to completion, and
 prints the elapsed time plus a created/failures summary. Ends by asserting
