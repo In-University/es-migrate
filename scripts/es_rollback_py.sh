@@ -14,17 +14,21 @@
 #
 #   0 PREFLIGHT   connectivity, indices exist, ES6 writable, cutover marker,
 #                 and a positive check that ES9 really is frozen
-#   1 DELTA_SYNC  ES9 (updated_at > cutover) -> ES6, resumable, journaled
+#   1 DELTA_SYNC  ES9 (TS_FIELD > cutover) -> ES6, resumable, journaled
 #   2 DELTA_GATE  cursor exhausted + no dead letters; blocks phase 3 otherwise
 #   3 RECONCILE   live _id set diff, both directions: delete ES6-only,
 #                 repair ES9-only
 #   4 VERIFY      counts, expected id set, random _source sample
 #
+# TS_FIELD=all turns phase 1 into a full copy
+#
 # Assumptions, all checked rather than trusted:
 #   - ES9 takes no writes for the duration. Verified in preflight by
-#     sampling _count and max(updated_at) twice.
-#   - Every write on ES9 bumped `updated_at`. The phase 3 reverse diff is
-#     the safety net if that ever failed for a create.
+#     sampling _count and max(TS_FIELD) twice -- or, in TS_FIELD=all mode,
+#     _count plus the index's primary indexing/delete counters.
+#   - Every write on ES9 bumped TS_FIELD. The phase 3 reverse diff is
+#     the safety net if that ever failed for a create. TS_FIELD=all does not
+#     need this assumption at all.
 #
 # Undo: every document is read from ES6 and journaled BEFORE it is
 # overwritten or deleted, so `undo` restores ES6 exactly. No snapshots.
@@ -49,6 +53,7 @@
 #   DST_INDEX             ES6 index or alias, the target   (default bench-es6)
 #   TS_FIELD              field the delta window ranges over, e.g.
 #                         updated_at or system_update_at   (default updated_at)
+#                         "all" = no window, copy every document
 #   ES6_USER / ES6_PW     auth for ES6            (default elastic / $ELASTIC_PW)
 #   ES9_USER / ES9_PW     auth for ES9            (default elastic / $ELASTIC_PW)
 #   STATE_DIR             state + journal dir     (default ./.rollback-state)
@@ -64,11 +69,11 @@
 #                         0 silences them)
 #
 # SAFETY -- read the phase they belong to before changing any of these:
-#   SAFETY_MARGIN         seconds shaved off cutover_at (default 300)
 #   MAX_DELETE_RATIO      refuse deletes above this share of ES6 (default 0.10)
 #   FREEZE_WAIT           seconds between freeze samples (default 10)
 #   SAMPLE_N              docs compared in verify (default 1000)
-#   SINCE                 override cutover_at     (ISO-8601, optional)
+#   SINCE                 override cutover_at     (ISO-8601, optional;
+#                         ignored when TS_FIELD=all)
 #   ALLOW_PARTIAL         "true" lets the gate pass with dead letters
 #   ASSUME_YES            "true" skips the delete-ratio confirmation
 #
@@ -90,7 +95,16 @@ DST_INDEX="${DST_INDEX:-bench-es6}"
 # The field a write bumps, and therefore the one the delta window ranges
 # over. It differs per index (updated_at, system_update_at, ...), so the
 # caller passes it; there is no safe default beyond the common case.
+#
+# The literal "all" means the index has no such field to trust: phase 1 then
+# copies every live document instead of a window. Matched case-insensitively
+# so ALL and All behave the same -- a mode this expensive should never hinge
+# on the shift key.
 TS_FIELD="${TS_FIELD:-updated_at}"
+case "$(printf '%s' "$TS_FIELD" | tr '[:upper:]' '[:lower:]')" in
+  all) ALL_MODE=true; TS_FIELD=all ;;
+  *)   ALL_MODE=false ;;
+esac
 ES6_USER="${ES6_USER:-elastic}"
 ES6_PW="${ES6_PW:-${ELASTIC_PW:-}}"
 ES9_USER="${ES9_USER:-elastic}"
@@ -114,7 +128,6 @@ PROGRESS_EVERY="${PROGRESS_EVERY:-50}"
 
 # ------------------------------------------------------------ config: 3/3 --
 # SAFETY. The last three disable a guard -- read the phase that uses one first.
-SAFETY_MARGIN="${SAFETY_MARGIN:-300}"
 MAX_DELETE_RATIO="${MAX_DELETE_RATIO:-0.10}"
 FREEZE_WAIT="${FREEZE_WAIT:-10}"
 SAMPLE_N="${SAMPLE_N:-1000}"
@@ -235,25 +248,37 @@ es9() { http_retry "$ES9_USER" "$ES9_PW" "$@"; }
 # Body for one delta page. Built by jq so PIT ids and search_after arrays are
 # never string-interpolated into shell-quoted JSON. `op` is gt or gte -- see
 # phase_delta for why that switches.
+#
+# In ALL_MODE there is no range and no timestamp to sort on, so the sort is
+# _shard_doc alone. That tiebreaker is only defined inside a PIT, which is
+# exactly where it is used -- and it is the cheapest total order ES offers,
+# since a full copy pages through the entire index.
 delta_page_body() {
   local pit="$1" since="$2" out="$3" cursor_src="$4" op="${5:-gt}"
   local cursor="null"
   [ -s "$cursor_src" ] && cursor="$(cat "$cursor_src")"
   jq -n --arg pit "$pit" --arg since "$since" --arg op "$op" --arg tsf "$TS_FIELD" \
+        --argjson allmode "$ALL_MODE" \
         --argjson size "$PAGE_SIZE" --argjson sa "$cursor" '
-      { query: {range: {($tsf): {($op): $since}}},
-        sort: [{($tsf): "asc"}, {_shard_doc: "asc"}], size: $size }
+      (if $allmode then { query: {match_all: {}}, sort: [{_shard_doc: "asc"}] }
+       else { query: {range: {($tsf): {($op): $since}}},
+              sort: [{($tsf): "asc"}, {_shard_doc: "asc"}] } end)
+    + { size: $size }
     + (if $pit == "" then {} else { pit: {id: $pit, keep_alive: "15m"} } end)
     + (if $sa == null then { track_total_hits: true } else { search_after: $sa } end)
   ' >"$out"
 }
 
 # One ES9 delta page -> id list, bulk chunks capped at BULK_BYTE_CAP, and a
-# staged next cursor. Prints "<hits> <last_updated_at>".
+# staged next cursor. Prints "<hits> <last_timestamp>".
+#
+# ALL_MODE passes an empty field name: there is no watermark to record, and a
+# source field that happens to be called "all" would otherwise be read as one.
 split_delta_page() {
-  local resp="$1"
+  local resp="$1" tsf="$TS_FIELD"
+  [ "$ALL_MODE" = true ] && tsf=""
   rm -f "$WORK"/delta.chunk.*.ndjson
-  python3 - "$resp" "$WORK" "$BULK_BYTE_CAP" "$TS_FIELD" <<'PY'
+  python3 - "$resp" "$WORK" "$BULK_BYTE_CAP" "$tsf" <<'PY'
 import json, sys
 resp, work, cap, tsf = sys.argv[1], sys.argv[2], int(sys.argv[3]), sys.argv[4]
 J = lambda o: json.dumps(o, separators=(',', ':'), ensure_ascii=False)
@@ -273,7 +298,7 @@ for h in hits:
         out = open('%s/delta.chunk.%04d.ndjson' % (work, i), 'w', encoding='utf-8'); sz = 0
     out.write(a + '\n' + b + '\n'); sz += n
 if out: out.close()
-print(len(hits), hits[-1]['_source'].get(tsf, '') if hits else '')
+print(len(hits), (hits[-1]['_source'].get(tsf, '') if hits and tsf else ''))
 PY
 }
 
@@ -474,39 +499,36 @@ phase_preflight() {
   fi
   log "   $DST_INDEX is writable"
 
-  local cutover
-  if [ -n "$SINCE" ]; then
-    cutover="$SINCE"; log "   using SINCE override: $cutover"
+  local cutover="" effective=""
+  if [ "$ALL_MODE" = true ]; then
+    log "   TS_FIELD=all -- no delta window, phase 1 copies every document"
+    [ -n "$SINCE" ] && warn "SINCE=$SINCE ignored: TS_FIELD=all has no time window"
   else
-    es9 GET "$ES9_URL/$SRC_INDEX/_mapping" >/dev/null || die "cannot read $SRC_INDEX mapping"
-    cutover="$(jq -r '.[].mappings._meta.cutover_at // ""' "$RESP")"
-    [ -n "$cutover" ] || die "_meta.cutover_at missing on $SRC_INDEX -- pass SINCE=<ISO-8601>"
-    log "   cutover_at=$cutover"
+    if [ -n "$SINCE" ]; then
+      cutover="$SINCE"; log "   using SINCE override: $cutover"
+    else
+      es9 GET "$ES9_URL/$SRC_INDEX/_mapping" >/dev/null || die "cannot read $SRC_INDEX mapping"
+      cutover="$(jq -r '.[].mappings._meta.cutover_at // ""' "$RESP")"
+      [ -n "$cutover" ] || die "_meta.cutover_at missing on $SRC_INDEX -- pass SINCE=<ISO-8601>, or TS_FIELD=all to copy everything"
+      log "   cutover_at=$cutover"
+    fi
+    effective="$(jq -rn --arg t "$cutover" '
+        ($t | fromdateiso8601) as $e
+        | if $e > now then error("future") else ($e | todateiso8601) end
+      ' 2>/dev/null)" \
+      || die "cutover_at is unusable (not ISO-8601, or in the future): $cutover"
+    log "   lower bound: $effective"
   fi
-
-  # The marker came from `date -u` on the ES9 VM, document timestamps from the
-  # application -- different clocks. Rewinding the lower bound costs a few
-  # redundant whole-document overwrites against a frozen source, and removes
-  # the skew direction that would otherwise drop documents silently.
-  local effective
-  effective="$(jq -rn --arg t "$cutover" --argjson m "$SAFETY_MARGIN" '
-      ($t | fromdateiso8601) as $e
-      | if $e > now then error("future") else ($e - $m | todateiso8601) end
-    ' 2>/dev/null)" \
-    || die "cutover_at is unusable (not ISO-8601, or in the future): $cutover"
-  log "   effective lower bound (-${SAFETY_MARGIN}s): $effective"
 
   # Every correctness argument below assumes ES9 is standing still. Sampling
   # twice is cheap and catches writers nobody remembered to stop.
-  local count_first count_second maxts_first maxts_second
-  es9 GET "$ES9_URL/$SRC_INDEX/_count" >/dev/null || die "count failed"
-  count_first="$(jq -r '.count' "$RESP")"; maxts_first="$(src_max_ts)"
-  log "   freeze sample 1: count=$count_first max($TS_FIELD)=$maxts_first -- waiting ${FREEZE_WAIT}s"
+  local probe_first probe_second
+  probe_first="$(src_freeze_probe)"
+  log "   freeze sample 1: $probe_first -- waiting ${FREEZE_WAIT}s"
   sleep "$FREEZE_WAIT"
-  es9 GET "$ES9_URL/$SRC_INDEX/_count" >/dev/null || die "count failed"
-  count_second="$(jq -r '.count' "$RESP")"; maxts_second="$(src_max_ts)"
-  if [ "$count_first" != "$count_second" ] || [ "$maxts_first" != "$maxts_second" ]; then
-    die "ES9 is still taking writes (count $count_first->$count_second, max $TS_FIELD $maxts_first->$maxts_second).
+  probe_second="$(src_freeze_probe)"
+  if [ "$probe_first" != "$probe_second" ]; then
+    die "ES9 is still taking writes ($probe_first -> $probe_second).
 Stop the writers first, or both the delta window and the id diff are
 computed against a moving target."
   fi
@@ -515,7 +537,32 @@ computed against a moving target."
   # Outputs of this phase, read by cmd_run.
   PREFLIGHT_CUTOVER_AT="$cutover"
   PREFLIGHT_SINCE="$effective"
-  PREFLIGHT_SRC_COUNT="$count_second"
+  PREFLIGHT_SRC_COUNT="${probe_second%% *}"
+  PREFLIGHT_SRC_COUNT="${PREFLIGHT_SRC_COUNT#count=}"
+}
+
+# One line describing the write state of the source, cheap enough to call
+# twice. Format is opaque -- the caller only compares two of them.
+src_freeze_probe() {
+  local count
+  es9 GET "$ES9_URL/$SRC_INDEX/_count" >/dev/null || die "count failed"
+  count="$(jq -r '.count' "$RESP")"
+  if [ "$ALL_MODE" != true ]; then
+    printf 'count=%s max(%s)=%s' "$count" "$TS_FIELD" "$(src_max_ts)"
+    return 0
+  fi
+
+  # No timestamp to take a max of, and _count alone cannot see an in-place
+  # update. The shard indexing counters can: every index and delete operation
+  # bumps them. Primaries only -- replica counters move on their own during
+  # recovery. They reset if a shard relocates, which within FREEZE_WAIT reads
+  # as "still writing" and aborts the run: wrong, but in the direction that
+  # refuses to start rather than the one that loses documents.
+  es9 GET "$ES9_URL/$SRC_INDEX/_stats/indexing" >/dev/null \
+    || die "cannot read indexing stats on $SRC_INDEX (needed by the TS_FIELD=all freeze check)"
+  printf 'count=%s writes=%s deletes=%s' "$count" \
+    "$(jq -r '._all.primaries.indexing.index_total // "?"' "$RESP")" \
+    "$(jq -r '._all.primaries.indexing.delete_total // "?"' "$RESP")"
 }
 
 src_max_ts() {
@@ -536,9 +583,13 @@ src_max_ts() {
 # ------------------------------------------------------------------ phase 1 --
 
 phase_delta() {
-  log "== phase 1: delta sync $SRC_INDEX -> $DST_INDEX on $TS_FIELD =="
+  if [ "$ALL_MODE" = true ]; then
+    log "== phase 1: full copy $SRC_INDEX -> $DST_INDEX (TS_FIELD=all) =="
+  else
+    log "== phase 1: delta sync $SRC_INDEX -> $DST_INDEX on $TS_FIELD =="
+  fi
   state_load
-  local since="$EFFECTIVE_SINCE" pit="" BULK_TAG=delta
+  local since="${EFFECTIVE_SINCE:-}" pit="" BULK_TAG=delta
   local synced="${SYNCED:-0}" seen="${SEEN:-0}" deadletters="${DL_COUNT:-0}"
   # `gt` on the first pass; a restart after a PIT expiry switches to `gte` so
   # the whole group sharing the watermark timestamp is re-scanned. With `gt`,
@@ -568,10 +619,23 @@ phase_delta() {
       if grep -q 'search_context_missing\|No search context found' "$RESP" 2>/dev/null; then
         restarts=$((restarts + 1))
         [ "$restarts" -gt 10 ] && die "PIT expired $restarts times without finishing; raise keep_alive or reduce PAGE_SIZE"
-        warn "PIT expired -- reopening, resuming from watermark ${WATERMARK:-$since} (inclusive)"
         pit="$(pit_open "$ES9_URL" "$SRC_INDEX")" || die "cannot reopen PIT"
         printf '%s' "$pit" >"$PIT_FILE"
-        state_load; since="${WATERMARK:-$since}"; range_op="gte"; : >"$CURSOR_FILE"
+        if [ "$ALL_MODE" = true ]; then
+          # _shard_doc is only meaningful inside the PIT that issued it, and
+          # with no watermark there is nothing to resume from -- the walk
+          # starts over. That is safe, not wasteful-only: every write is a
+          # whole-document overwrite of a frozen source, so redoing a page
+          # changes nothing. `seen` restarts with it, or the phase 2 gate
+          # would weigh a two-pass total against a one-pass TOTAL_HITS and
+          # pass a walk that never actually finished.
+          warn "PIT expired -- reopening and restarting the full copy from the beginning"
+          seen=0; state_set SEEN 0
+        else
+          warn "PIT expired -- reopening, resuming from watermark ${WATERMARK:-$since} (inclusive)"
+          state_load; since="${WATERMARK:-$since}"; range_op="gte"
+        fi
+        : >"$CURSOR_FILE"
         continue
       fi
       [ "$INTERRUPTED" -eq 1 ] && {
@@ -584,7 +648,11 @@ phase_delta() {
 
     if [ "$seen" -eq 0 ] && [ ! -s "$CURSOR_FILE" ]; then
       state_set TOTAL_HITS "$(jq -r '.hits.total.value // .hits.total' "$RESP")"
-      log "   delta window contains $TOTAL_HITS doc(s)"
+      if [ "$ALL_MODE" = true ]; then
+        log "   full copy covers $TOTAL_HITS doc(s)"
+      else
+        log "   delta window contains $TOTAL_HITS doc(s)"
+      fi
     fi
 
     local page_summary hits last_ts
@@ -1084,6 +1152,7 @@ cmd_run() {
   state_set CUTOVER_AT "$PREFLIGHT_CUTOVER_AT"
   state_set EFFECTIVE_SINCE "$PREFLIGHT_SINCE"
   state_set RUN_SRC_INDEX "$SRC_INDEX"; state_set RUN_DST_INDEX "$DST_INDEX"
+  state_set RUN_TS_FIELD "$TS_FIELD"
   state_set SYNCED 0; state_set SEEN 0; state_set DL_COUNT 0; state_set JOURNAL_SEQ 0
   state_set PHASE DELTA_SYNC
   pipeline
@@ -1098,6 +1167,10 @@ cmd_resume() {
   # invalidate every checkpoint.
   [ "${RUN_SRC_INDEX:-$SRC_INDEX}" = "$SRC_INDEX" ] || die "state belongs to SRC_INDEX=${RUN_SRC_INDEX}"
   [ "${RUN_DST_INDEX:-$DST_INDEX}" = "$DST_INDEX" ] || die "state belongs to DST_INDEX=${RUN_DST_INDEX}"
+  # Same reasoning for the field: SEEN and TOTAL_HITS were counted against one
+  # window, and switching to or away from `all` redefines what they mean.
+  [ "${RUN_TS_FIELD:-$TS_FIELD}" = "$TS_FIELD" ] \
+    || die "state belongs to TS_FIELD=${RUN_TS_FIELD} (you passed $TS_FIELD) -- 'reset' to start over"
   log "resuming from phase=$PHASE (seen=${SEEN:-0} synced=${SYNCED:-0})"
   pipeline
 }
@@ -1109,9 +1182,10 @@ cmd_status() {
 state dir      : $STATE_DIR
 run id         : ${RUN_ID:-?}
 phase          : $PHASE
-cutover_at     : ${CUTOVER_AT:-?}
-effective since: ${EFFECTIVE_SINCE:-?}
-delta total    : ${TOTAL_HITS:-?}
+ts field       : ${RUN_TS_FIELD:-?}
+cutover_at     : ${CUTOVER_AT:-(none: full copy)}
+lower bound    : ${EFFECTIVE_SINCE:-(none: full copy)}
+phase 1 total  : ${TOTAL_HITS:-?}
 seen / synced  : ${SEEN:-0} / ${SYNCED:-0}
 dead letters   : ${DL_COUNT:-0}   ($DEADLETTER)
 deleted        : ${DELETED:-0}
