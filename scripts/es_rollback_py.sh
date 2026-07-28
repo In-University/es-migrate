@@ -12,8 +12,8 @@
 # read those exact documents as "deleted on ES9" -- turning a failed sync
 # into data loss. Hence the phases, and hence the gate.
 #
-#   0 PREFLIGHT   connectivity, indices exist, ES6 writable, cutover marker,
-#                 and a positive check that ES9 really is frozen
+#   0 PREFLIGHT   connectivity, cluster health, indices exist, ES6 writable
+#                 and the credentials allowed to write it, cutover marker
 #   1 DELTA_SYNC  ES9 (TS_FIELD > cutover) -> ES6, resumable, journaled
 #   2 DELTA_GATE  cursor exhausted + no dead letters; blocks phase 3 otherwise
 #   3 RECONCILE   live _id set diff, both directions: delete ES6-only,
@@ -22,10 +22,13 @@
 #
 # TS_FIELD=all turns phase 1 into a full copy
 #
-# Assumptions, all checked rather than trusted:
-#   - ES9 takes no writes for the duration. Verified in preflight by
-#     sampling _count and max(TS_FIELD) twice -- or, in TS_FIELD=all mode,
-#     _count plus the index's primary indexing/delete counters.
+# Assumptions:
+#   - ES9 takes no writes for the duration. NOT verified. The rollback runs
+#     inside a planned downtime window, so stopping the writers belongs to
+#     the runbook. An earlier version sampled the index twice to prove it,
+#     which cost FREEZE_WAIT seconds per index and raised a false alarm
+#     whenever a shard relocated between the two samples. Every phase below
+#     is wrong if this assumption is false.
 #   - Every write on ES9 bumped TS_FIELD. The phase 3 reverse diff is
 #     the safety net if that ever failed for a create. TS_FIELD=all does not
 #     need this assumption at all.
@@ -70,7 +73,6 @@
 #
 # SAFETY -- read the phase they belong to before changing any of these:
 #   MAX_DELETE_RATIO      refuse deletes above this share of ES6 (default 0.10)
-#   FREEZE_WAIT           seconds between freeze samples (default 10)
 #   SAMPLE_N              docs compared in verify (default 1000)
 #   SINCE                 override cutover_at     (ISO-8601, optional;
 #                         ignored when TS_FIELD=all)
@@ -129,7 +131,6 @@ PROGRESS_EVERY="${PROGRESS_EVERY:-50}"
 # ------------------------------------------------------------ config: 3/3 --
 # SAFETY. The last three disable a guard -- read the phase that uses one first.
 MAX_DELETE_RATIO="${MAX_DELETE_RATIO:-0.10}"
-FREEZE_WAIT="${FREEZE_WAIT:-10}"
 SAMPLE_N="${SAMPLE_N:-1000}"
 SINCE="${SINCE:-}"
 ALLOW_PARTIAL="${ALLOW_PARTIAL:-false}"
@@ -403,6 +404,25 @@ bulk_send() {
   done
 }
 
+deadletter_summary() {
+  [ -s "$DEADLETTER" ] || return 0
+  log "   $(wc -l <"$DEADLETTER" | tr -d ' ') dead-lettered doc(s) in $DEADLETTER -- top reasons:"
+  python3 - "$DEADLETTER" >"$WORK/deadletter.summary" 2>/dev/null <<'PY' || return 0
+import json, sys, collections
+n, why = collections.Counter(), {}
+for line in open(sys.argv[1], encoding='utf-8'):
+    try: r = json.loads(line)
+    except ValueError: continue
+    e = r.get('error') if isinstance(r.get('error'), dict) else {}
+    k = (r.get('tag') or '?', r.get('status') or '?', e.get('type') or '-')
+    n[k] += 1
+    why.setdefault(k, ' '.join((e.get('reason') or '').split())[:120])
+for k, c in n.most_common(5):
+    print('     %d x %s HTTP %s %s: %s' % (c, k[0], k[1], k[2], why[k]))
+PY
+  while IFS= read -r line; do log "$line"; done <"$WORK/deadletter.summary"
+}
+
 # Read the ES6 pre-image of every id in a file into the journal, before the
 # caller overwrites or deletes them.
 #
@@ -474,6 +494,27 @@ resolve_aliases() {
   resolve_one es6 "$ES6_URL" "$DST_INDEX" ES6; DST_INDEX="$RESOLVED"
 }
 
+# --------------------------------------------------------- preflight checks --
+check_health() {
+  local fn="$1" url="$2" index="$3" label="$4" status unassigned
+  "$fn" GET "$url/_cluster/health/$index" >/dev/null \
+    || die "$label: cannot read cluster health for $index"
+  status="$(jq -r '.status // "unknown"' "$RESP")"
+  unassigned="$(jq -r '.unassigned_shards // 0' "$RESP")"
+
+  if [ "$status" = "red" ]; then
+    die "$label: $index is RED -- $unassigned shard(s) unassigned.
+Neither side can be read or written completely in this state, and a short id
+export turns into wrong deletes in phase 3. Start here:
+  curl -u $ES6_USER:\$ELASTIC_PW '$url/_cluster/allocation/explain?pretty'"
+  fi
+  log "   $label: $index health=$status unassigned=$unassigned"
+  # Yellow is the normal state for a single-node ES6 with replicas configured,
+  # so it is worth saying out loud but never worth stopping for.
+  [ "$status" = "yellow" ] && warn "$label: $index is yellow -- missing replicas only, the rollback can still run"
+  return 0
+}
+
 # ------------------------------------------------------------------ phase 0 --
 
 phase_preflight() {
@@ -482,6 +523,9 @@ phase_preflight() {
   es9 GET "$ES9_URL/$SRC_INDEX/_count" >/dev/null || die "ES9 index $SRC_INDEX not found"
   es6 GET "$ES6_URL/$DST_INDEX/_count" >/dev/null || die "ES6 index $DST_INDEX not found"
   log "   both indices present"
+
+  check_health es9 "$ES9_URL" "$SRC_INDEX" ES9
+  check_health es6 "$ES6_URL" "$DST_INDEX" ES6
 
   # Two weeks idle is long enough for ES6 to have hit the flood-stage disk
   # watermark and blocked itself. Every write below would fail one at a
@@ -520,56 +564,9 @@ phase_preflight() {
     log "   lower bound: $effective"
   fi
 
-  # Every correctness argument below assumes ES9 is standing still. Sampling
-  # twice is cheap and catches writers nobody remembered to stop.
-  local probe_first probe_second
-  probe_first="$(src_freeze_probe)"
-  log "   freeze sample 1: $probe_first -- waiting ${FREEZE_WAIT}s"
-  sleep "$FREEZE_WAIT"
-  probe_second="$(src_freeze_probe)"
-  if [ "$probe_first" != "$probe_second" ]; then
-    die "ES9 is still taking writes ($probe_first -> $probe_second).
-Stop the writers first, or both the delta window and the id diff are
-computed against a moving target."
-  fi
-  log "   freeze verified: ES9 static over ${FREEZE_WAIT}s"
-
   # Outputs of this phase, read by cmd_run.
   PREFLIGHT_CUTOVER_AT="$cutover"
   PREFLIGHT_SINCE="$effective"
-  PREFLIGHT_SRC_COUNT="${probe_second%% *}"
-  PREFLIGHT_SRC_COUNT="${PREFLIGHT_SRC_COUNT#count=}"
-}
-
-# One line describing the write state of the source, cheap enough to call
-# twice. Format is opaque -- the caller only compares two of them.
-src_freeze_probe() {
-  local count
-  es9 GET "$ES9_URL/$SRC_INDEX/_count" >/dev/null || die "count failed"
-  count="$(jq -r '.count' "$RESP")"
-  if [ "$ALL_MODE" != true ]; then
-    printf 'count=%s max(%s)=%s' "$count" "$TS_FIELD" "$(src_max_ts)"
-    return 0
-  fi
-
-  # No timestamp to take a max of, and _count alone cannot see an in-place
-  # update. The shard indexing counters can: every index and delete operation
-  # bumps them. Primaries only -- replica counters move on their own during
-  # recovery. They reset if a shard relocates, which within FREEZE_WAIT reads
-  # as "still writing" and aborts the run: wrong, but in the direction that
-  # refuses to start rather than the one that loses documents.
-  es9 GET "$ES9_URL/$SRC_INDEX/_stats/indexing" >/dev/null \
-    || die "cannot read indexing stats on $SRC_INDEX (needed by the TS_FIELD=all freeze check)"
-  printf 'count=%s writes=%s deletes=%s' "$count" \
-    "$(jq -r '._all.primaries.indexing.index_total // "?"' "$RESP")" \
-    "$(jq -r '._all.primaries.indexing.delete_total // "?"' "$RESP")"
-}
-
-src_max_ts() {
-  jq -n --arg f "$TS_FIELD" '{size: 0, aggs: {m: {max: {field: $f}}}}' >"$WORK/preflight.maxagg.json"
-  es9 POST "$ES9_URL/$SRC_INDEX/_search" application/json "$WORK/preflight.maxagg.json" >/dev/null \
-    || die "max($TS_FIELD) aggregation failed on $SRC_INDEX"
-  jq -r '.aggregations.m.value_as_string // (.aggregations.m.value | tostring)' "$RESP"
 }
 
 # ------------------------------------------------------------ refresh state --
@@ -704,6 +701,7 @@ Deletes are NOT safe to reconcile -- the id diff would read the missing
 documents as deleted on ES9. Run 'resume' first."
   fi
   if [ "$deadletters" -gt 0 ] && [ "$ALLOW_PARTIAL" != "true" ]; then
+    deadletter_summary
     die "gate FAILED: $deadletters doc(s) in $DEADLETTER were rejected by ES6.
 Fix the cause and resume. ALLOW_PARTIAL=true overrides, but only if you
 accept that ES6 will be missing those documents and that the delete
@@ -1124,6 +1122,7 @@ pipeline() {
   phase_verify || rc=$?
   state_load
   if [ "${DL_COUNT:-0}" -gt 0 ]; then
+    deadletter_summary
     warn "finished with ${DL_COUNT} dead-lettered doc(s) in $DEADLETTER"
     exit 2
   fi
@@ -1192,6 +1191,7 @@ deleted        : ${DELETED:-0}
 repaired       : ${REPAIRED:-0}
 journal rows   : ${JOURNAL_SEQ:-0}   ($JOURNAL)
 EOF
+  [ "${DL_COUNT:-0}" -gt 0 ] && deadletter_summary
   case "$PHASE" in
     DELTA_SYNC|DELTA_DONE|GATE_PASSED) echo "next           : ./es_rollback_py.sh resume" ;;
     RECONCILE_DONE)                    echo "next           : ./es_rollback_py.sh verify" ;;
