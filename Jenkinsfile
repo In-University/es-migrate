@@ -1,30 +1,14 @@
 // ES6 <- ES9 blue-green rollback.
 //
-// One stage per index, running scripts/es_rollback_py.sh with that index's
-// timestamp field. The script itself handles exactly one index; the ordering
-// and the per-index isolation live here, which is also what buys the
-// per-stage log, retry and timing that Jenkins gives for free.
+// One stage per index, running scripts/es_rollback_py.sh.
+// The script handles one index at a time; ordering and per-index isolation
+// live here, providing per-stage logs, retries, and timing in Jenkins.
 //
-// This pipeline is self-contained: it drives scripts/es_rollback_py.sh and
-// nothing else. scripts/es_rollback_all.sh does the same job for a by-hand
-// run on the VM and is deliberately NOT called from here -- neither path
-// should break because the other moved. The price is the index map below,
-// which has to be kept in step with the one in es_rollback_all.sh.
-//
-// Sequential on purpose: the delta sync already fans out across shards, and
-// ES6 is disk-bound during a rollback, so two indices at once make both
-// slower. A failing index does not stop the others -- one bad index should
-// not cost the window for the rest.
-//
-// Exit codes from the script: 0 ok, 2 dead letters (UNSTABLE), 1 fatal
-// (FAILURE), 130 interrupted (ABORTED).
+// State is pulled from GCS Bucket before running each index, uploaded back
+// to GCS Bucket immediately after, and then deleted locally (rm -rf) to save disk.
 
-// Index -> the field a write on that index bumps. The name is the same on
-// both clusters because both address the alias (products -> products_v1.0.1).
-INDEX_TS = [
-  'products': 'updated_at',
-  'orders'  : 'system_update_at',
-]
+// Array of index names to run rollback for.
+INDICES = ['products', 'orders']
 
 pipeline {
   agent { label 'es-migrate' }
@@ -38,6 +22,38 @@ pipeline {
       name: 'ONLY',
       defaultValue: '',
       description: 'Space- or comma-separated indices. Empty runs all of them.')
+    string(
+      name: 'SRC_INDEX',
+      defaultValue: '',
+      description: 'Source Index name on ES9 (leave empty to use index name from list)')
+    string(
+      name: 'DST_INDEX',
+      defaultValue: '',
+      description: 'Destination Index name on ES6 (leave empty to use index name from list)')
+    string(
+      name: 'ES6_URL',
+      defaultValue: 'http://es6-dest:9200',
+      description: 'Destination ES6 Cluster URL')
+    string(
+      name: 'ES6_USER',
+      defaultValue: 'elastic',
+      description: 'ES6 Username')
+    password(
+      name: 'ES6_PW',
+      defaultValue: 'elastic',
+      description: 'ES6 Password')
+    string(
+      name: 'ES9_URL',
+      defaultValue: 'http://es9-dest:9200',
+      description: 'Source ES9 Cluster URL')
+    string(
+      name: 'ES9_USER',
+      defaultValue: 'elastic',
+      description: 'ES9 Username')
+    password(
+      name: 'ES9_PW',
+      defaultValue: 'elastic',
+      description: 'ES9 Password')
     booleanParam(
       name: 'ASSUME_YES',
       defaultValue: false,
@@ -56,12 +72,10 @@ pipeline {
   }
 
   environment {
-    ES6_URL    = "${env.ES6_URL ?: 'http://es6-dest:9200'}"
-    ES9_URL    = "${env.ES9_URL ?: 'http://es9-dest:9200'}"
-    ELASTIC_PW = credentials('elastic-password')
-    // Outside the workspace: state and journal must survive a workspace
-    // wipe, because `resume` and `undo` are worthless without them.
-    STATE_ROOT = '/var/lib/es-rollback'
+    TS_FIELD      = "${env.TS_FIELD ?: 'modified_at'}"
+    REMOVE_FIELDS = "${env.REMOVE_FIELDS ?: 'modified_at'}"
+    GCS_BUCKET    = "${env.GCS_BUCKET ?: 'es-migrate-rollback-state'}"
+    STATE_ROOT    = "${env.STATE_ROOT ?: "${env.WORKSPACE}/.rollback-state"}"
   }
 
   stages {
@@ -69,10 +83,18 @@ pipeline {
       steps {
         sh '''
           set -eu
-          for b in curl jq python3 awk sort comm gzip split; do
+          for b in curl jq python3 awk sort comm gzip split gsutil; do
             command -v "$b" >/dev/null || { echo "missing: $b" >&2; exit 1; }
           done
           mkdir -p "$STATE_ROOT"
+          avail_kb=$(df -k "$STATE_ROOT" | awk 'NR==2 {print $4}')
+          avail_mb=$((avail_kb / 1024))
+          avail_gb=$(awk -v m="$avail_mb" 'BEGIN {printf "%.2f", m/1024}')
+          echo "Available disk space on $STATE_ROOT: ${avail_mb} MB (${avail_gb} GB)"
+          if [ "$avail_kb" -lt 1048576 ]; then
+            echo "ERROR: Insufficient disk space on $STATE_ROOT! Required >= 1GB (1024MB), available: ${avail_mb}MB" >&2
+            exit 1
+          fi
         '''
       }
     }
@@ -80,30 +102,23 @@ pipeline {
     stage('resolve indices') {
       steps {
         script {
-          // An unknown name is a typo, and a typo that silently selected
-          // nothing would read as "that index had no work to do".
           def wanted = params.ONLY.trim()
             ? params.ONLY.split(/[,\s]+/).collect { it.trim() }.findAll { it }
-            : INDEX_TS.keySet().sort()
+            : INDICES.sort()
 
-          def unknown = wanted.findAll { !INDEX_TS.containsKey(it) }
+          def unknown = wanted.findAll { !INDICES.contains(it) }
           if (unknown) {
-            error("ONLY names indices that are not in the map: ${unknown.join(', ')}" +
-                  " (have: ${INDEX_TS.keySet().sort().join(', ')})")
+            error("ONLY names indices that are not in the list: ${unknown.join(', ')}" +
+                  " (have: ${INDICES.sort().join(', ')})")
           }
 
           SELECTED = wanted
-          echo "will run '${params.COMMAND}' on: ${SELECTED.join(', ')}"
+          echo "will run '${params.COMMAND}' on: ${SELECTED.join(', ')} (TS_FIELD=${env.TS_FIELD}, REMOVE_FIELDS=${env.REMOVE_FIELDS})"
           currentBuild.description = "${params.COMMAND}: ${SELECTED.join(', ')}"
         }
       }
     }
 
-    // undo rewrites every document the run touched and deletes the ones it
-    // created. It is correct and it is tested, but it is also the one command
-    // whose blast radius is the whole index, so it does not start on a
-    // mis-click. agent none so the prompt does not pin an executor while it
-    // waits.
     stage('confirm undo') {
       when { expression { params.COMMAND == 'undo' } }
       agent none
@@ -114,7 +129,7 @@ pipeline {
               message: """Restore ES6 from the journal for: ${SELECTED.join(', ')}?
 
 This overwrites every document the run wrote and deletes every document it
-created, using the pre-images in ${env.STATE_ROOT}/<index>/journal.tsv.gz.
+created, using the pre-images in gs://${env.GCS_BUCKET}/rollback-state/<index>/journal.tsv.gz.
 Only the CURRENT run is replayed -- archived journals are not.""",
               ok: 'Run undo')
           }
@@ -126,32 +141,59 @@ Only the CURRENT run is replayed -- archived journals are not.""",
       steps {
         script {
           for (idx in SELECTED) {
-            // Capture per iteration; a bare reference would read the last
-            // value by the time the closure runs.
             def index = idx
-            def tsField = INDEX_TS[index]
+            def srcIdx = params.SRC_INDEX.trim() ? params.SRC_INDEX.trim() : index
+            def dstIdx = params.DST_INDEX.trim() ? params.DST_INDEX.trim() : index
 
             stage("${index}") {
-              // A failed index marks its own stage and the build, then lets
-              // the loop carry on to the next one.
               catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
                 withEnv([
-                  "SRC_INDEX=${index}",
-                  "DST_INDEX=${index}",
-                  "TS_FIELD=${tsField}",
+                  "ES6_URL=${params.ES6_URL}",
+                  "ES6_USER=${params.ES6_USER}",
+                  "ES6_PW=${params.ES6_PW}",
+                  "ES9_URL=${params.ES9_URL}",
+                  "ES9_USER=${params.ES9_USER}",
+                  "ES9_PW=${params.ES9_PW}",
+                  "ELASTIC_PW=${params.ES6_PW}",
+                  "SRC_INDEX=${srcIdx}",
+                  "DST_INDEX=${dstIdx}",
+                  "TS_FIELD=${env.TS_FIELD}",
+                  "REMOVE_FIELDS=${env.REMOVE_FIELDS}",
                   "STATE_DIR=${env.STATE_ROOT}/${index}",
                   "ASSUME_YES=${params.ASSUME_YES}",
                   "ALLOW_PARTIAL=${params.ALLOW_PARTIAL}",
                 ]) {
+                  // 1. Pull state from GCS Bucket before running
+                  sh '''
+                    set -eu
+                    mkdir -p "$STATE_DIR"
+                    echo ">> Pulling state from gs://${GCS_BUCKET}/rollback-state/${SRC_INDEX}..."
+                    gsutil -m rsync -r "gs://${GCS_BUCKET}/rollback-state/${SRC_INDEX}" "$STATE_DIR" || true
+                  '''
+
+                  // 2. Execute rollback command
                   def rc = sh(
                     returnStatus: true,
                     script: "bash scripts/es_rollback_py.sh ${params.COMMAND}")
 
-                  // 2 is "finished, but some documents were rejected by ES6"
-                  // -- real work landed, and the dead letter file is the
-                  // thing to look at. That is UNSTABLE, not FAILURE.
+                  // 3. Sync state back to GCS Bucket, backup lightweight summary files, and clean up heavy local dir
+                  sh '''
+                    set -eu
+                    echo ">> Syncing updated state to gs://${GCS_BUCKET}/rollback-state/${SRC_INDEX}..."
+                    gsutil -m rsync -r "$STATE_DIR" "gs://${GCS_BUCKET}/rollback-state/${SRC_INDEX}" || true
+
+                    echo ">> Backing up lightweight metadata for Jenkins summary..."
+                    mkdir -p "$STATE_ROOT/summary/$SRC_INDEX"
+                    cp "$STATE_DIR/state.env" "$STATE_ROOT/summary/$SRC_INDEX/" 2>/dev/null || true
+                    cp "$STATE_DIR/deadletter.ndjson" "$STATE_ROOT/summary/$SRC_INDEX/" 2>/dev/null || true
+                    cp "$STATE_DIR/run.log" "$STATE_ROOT/summary/$SRC_INDEX/" 2>/dev/null || true
+
+                    echo ">> Cleaning up local STATE_DIR to free disk space..."
+                    rm -rf "$STATE_DIR"
+                  '''
+
                   if (rc == 2) {
-                    unstable("${index}: finished with dead letters -- see ${env.STATE_ROOT}/${index}/deadletter.ndjson")
+                    unstable("${index}: finished with dead letters -- see gs://${env.GCS_BUCKET}/rollback-state/${index}/deadletter.ndjson")
                   } else if (rc == 130) {
                     error("${index}: interrupted")
                   } else if (rc != 0) {
@@ -169,14 +211,14 @@ Only the CURRENT run is replayed -- archived journals are not.""",
   post {
     always {
       script {
-        def indices = binding.hasVariable('SELECTED') ? SELECTED : INDEX_TS.keySet().sort()
+        def indices = binding.hasVariable('SELECTED') ? SELECTED : INDICES.sort()
         def row = { c -> String.format('%-24s %-16s %18s %9s %9s %11s',
                                        c[0], c[1], c[2], c[3], c[4], c[5]) }
         def lines = [row(['INDEX', 'PHASE', 'SEEN/SYNCED', 'DELETED', 'REPAIRED', 'DEADLETTER'])]
         def phases = []
 
         for (idx in indices) {
-          def path = "${env.STATE_ROOT}/${idx}/state.env"
+          def path = "${env.STATE_ROOT}/summary/${idx}/state.env"
           def kv = [:]
           if (fileExists(path)) {
             readFile(path).split('\n').each { line ->
@@ -193,28 +235,24 @@ Only the CURRENT run is replayed -- archived journals are not.""",
 
         echo "\n========== summary (${params.COMMAND}) ==========\n" +
              lines.join('\n') +
-             "\n\nstate: ${env.STATE_ROOT}/<index>/   " +
-             "dead letters: ${env.STATE_ROOT}/<index>/deadletter.ndjson"
+             "\n\nstate: gs://${env.GCS_BUCKET}/rollback-state/<index>/   " +
+             "dead letters: gs://${env.GCS_BUCKET}/rollback-state/<index>/deadletter.ndjson"
 
-        // Phases on the build page, so a glance at the history says which
-        // indices finished without opening the log.
         currentBuild.description = "${params.COMMAND} — ${phases.join(' ')}"
       }
 
-      // The run log and the id diffs are what any post-mortem starts from,
-      // and they live outside the workspace, so copy them in to archive.
       sh '''
         set -eu
         rm -rf artifacts && mkdir -p artifacts
-        for d in "$STATE_ROOT"/*/; do
-          [ -d "$d" ] || continue
-          n="$(basename "$d")"
-          mkdir -p "artifacts/$n"
-          for f in run.log state.env deadletter.ndjson to_delete to_repair \
-                   verify_extra verify_missing verify_sample_diff; do
-            [ -f "$d$f" ] && cp "$d$f" "artifacts/$n/" || true
+        if [ -d "$STATE_ROOT/summary" ]; then
+          for d in "$STATE_ROOT/summary"/*/; do
+            [ -d "$d" ] || continue
+            n="$(basename "$d")"
+            mkdir -p "artifacts/$n"
+            cp "$d"* "artifacts/$n/" 2>/dev/null || true
           done
-        done
+          rm -rf "$STATE_ROOT/summary"
+        fi
       '''
       archiveArtifacts artifacts: 'artifacts/**', allowEmptyArchive: true, fingerprint: false
     }
