@@ -144,7 +144,7 @@ TOTAL=10 WORKERS=1 ES_PW='<elastic_password>' python3 generate_es6.py
 ELASTIC_PW='<elastic_password>' ./reindex_remote.sh
 
 # 2. Simulate post-cutover activity on ES9: a few creates, updates, hard deletes
-ES9_URL=http://<es9-external-ip>:9200 ES_PW='elastic' MUTATE_PCT=0.05 python3 simulate_es9_mutations.py
+ES9_URL=http:localhost:9200 ES_PW='elastic' MUTATE_PCT=0.1 python3 simulate_es9_mutations.py
 
 # 3. Stand up the rollback cluster (attaches to the same VPC/subnet as the ES VMs)
 cd ../terraform/rollback
@@ -326,9 +326,12 @@ ES6_URL="http://${ES6_EXT}:9200" ES9_URL="http://${ES9_EXT}:9200" \
 ELASTIC_PW='elastic' \
 ./reconcile_deletes.sh
 
+sudo mkdir -p /data/rollback
+sudo chown -R $USER:$USER /data
+
 export STATE_DIR=/data/rollback
 export ES6_URL=http://10.146.0.10:9200
 export ES9_URL=http://10.146.0.11:9200
 export ELASTIC_PW='elastic'
-export TS_FIELD=all
-DEBUG_TIMING=1 ./es_rollback_py.sh run
+export REMOVE_FIELDS=modified_at
+./es_rollback_py.sh run

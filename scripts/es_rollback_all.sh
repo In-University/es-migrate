@@ -44,7 +44,7 @@
 #   ./es_rollback_all.sh undo products
 #
 # Env: everything es_rollback_py.sh accepts (ES6_URL, ES9_URL, ELASTIC_PW,
-# PAGE_SIZE, ASSUME_YES, ...) is inherited untouched. Two extra:
+# PAGE_SIZE, REMOVE_FIELDS, ASSUME_YES, ...) is inherited untouched. Two extra:
 #
 #   STATE_ROOT   parent of the per-index state dirs (default ./.rollback-state)
 #   ROLLBACK_SH  path to the single-index script (default alongside this one)

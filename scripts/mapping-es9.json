@@ -33,6 +33,7 @@
       "in_stock":      { "type": "boolean" },
       "created_at":    { "type": "date" },
       "updated_at":    { "type": "date" },
+      "modified_at":   { "type": "date" },
       "published_at":  { "type": "date" },
       "client_ip":     { "type": "ip" },
       "location":      { "type": "geo_point" },

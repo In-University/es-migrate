@@ -66,6 +66,7 @@ DELETE_RATIO = float(os.environ.get("DELETE_RATIO", "0.20"))
 BATCH = int(os.environ.get("BATCH", "2000"))
 WORKERS = int(os.environ.get("WORKERS", str(cpu_count())))
 SEED = int(os.environ.get("SEED", "42"))
+INGEST_PIPELINE = os.environ.get("INGEST_PIPELINE", "set_modified_at")
 
 WORDS = ["fast", "durable", "compact", "premium", "eco", "smart", "classic", "pro", "lite", "max"]
 
@@ -99,6 +100,24 @@ def http(method, path, body=None, is_bulk=False):
 
 def now():
     return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+
+
+def setup_ingest_pipeline():
+    print(f">> setting up ingest pipeline '{INGEST_PIPELINE}' on ES9")
+    pipeline_body = {
+        "description": "Set modified_at timestamp default to ingest time",
+        "processors": [
+            {
+                "set": {
+                    "field": "modified_at",
+                    "value": "{{_ingest.timestamp}}"
+                }
+            }
+        ]
+    }
+    http("PUT", f"/_ingest/pipeline/{INGEST_PIPELINE}", pipeline_body)
+    http("PUT", f"/{INDEX}/_settings", {"index.default_pipeline": INGEST_PIPELINE})
+    print(f"   ingest pipeline '{INGEST_PIPELINE}' set as index.default_pipeline on {INDEX}")
 
 
 # ---------------------------------------------------------------- small mode --
@@ -136,6 +155,7 @@ def run_small_mode():
             "price": 9.99,
             "created_at": now(),
             "updated_at": now(),
+            "modified_at": now(),
         }
         http("PUT", f"/{INDEX}/_doc/{new_id}", doc)
         print(f"   created {new_id}")
@@ -143,7 +163,7 @@ def run_small_mode():
     print(f">> updating {len(to_update)} existing docs")
     for doc_id in to_update:
         http("POST", f"/{INDEX}/_update/{doc_id}", {
-            "doc": {"title": "UPDATED by rollback simulation", "updated_at": now()}
+            "doc": {"title": "UPDATED by rollback simulation", "updated_at": now(), "modified_at": now()}
         })
         print(f"   updated {doc_id}")
 
@@ -165,6 +185,7 @@ def make_update_action(i):
     src = json.dumps({"doc": {
         "title": "UPDATED by rollback simulation %d" % i,
         "updated_at": now(),
+        "modified_at": now(),
     }}, separators=(",", ":"))
     return action + "\n" + src
 
@@ -186,6 +207,7 @@ def make_create_action(i):
         "price": round(rnd.uniform(1, 5000), 2),
         "created_at": now(),
         "updated_at": now(),
+        "modified_at": now(),
     }
     action = '{"index":{"_id":"%s"}}' % doc_id
     src = json.dumps(doc, separators=(",", ":"))
@@ -270,6 +292,7 @@ def run_pct_mode():
 
 
 def main():
+    setup_ingest_pipeline()
     if MUTATE_PCT:
         run_pct_mode()
     else:

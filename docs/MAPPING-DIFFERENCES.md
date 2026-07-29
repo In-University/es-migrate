@@ -35,7 +35,14 @@ there's a problem today, but because it stops being true the moment anyone
 adds a custom `format` string to one of these fields without checking it
 against both parsers first.
 
-## 3. No document fields were added for the rollback path
+## 3. ES9-only fields (e.g. `modified_at`)
+
+- **ES9**: Contains `modified_at` (populated automatically via ingest pipeline `set_modified_at`).
+- **ES6**: Does not have `modified_at` in mapping.
+
+During rollback from ES9 to ES6, use `REMOVE_FIELDS=modified_at` in `es_rollback_py.sh` to automatically strip `modified_at` before documents are posted to ES6.
+
+## 4. No document fields were added for the rollback path
 
 Deliberately: the rollback delta sync does not depend on any mapping change.
 `scripts/rollback_sync.sh` carries creates/updates across using the existing

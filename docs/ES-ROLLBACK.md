@@ -504,6 +504,9 @@ Chỉ tầng đầu là thứ phải nhìn mỗi lần chạy.
 | `ES6_USER` / `ES6_PW` | `elastic` / `$ELASTIC_PW` | |
 | `ES9_USER` / `ES9_PW` | `elastic` / `$ELASTIC_PW` | |
 | `STATE_DIR` | `./.rollback-state` | Chứa cả journal — xem §3c và §12 |
+| `TS_FIELD` | `updated_at` | Trường timestamp để delta sync |
+| `SINCE` | (tự động đọc `_meta.cutover_at`) | Override mốc thời gian ISO-8601 bắt đầu delta sync |
+| `REMOVE_FIELDS` | (rỗng) | Danh sách trường cần loại bỏ trước khi ghi về ES6 (ví dụ `modified_at`) |
 
 **Tầng 2 — hiệu năng** (chỉ khi chạy chậm hoặc hết RAM)
 

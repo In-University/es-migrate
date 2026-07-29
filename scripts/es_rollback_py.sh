@@ -56,7 +56,8 @@
 #   DST_INDEX             ES6 index or alias, the target   (default bench-es6)
 #   TS_FIELD              field the delta window ranges over, e.g.
 #                         updated_at or system_update_at   (default updated_at)
-#                         "all" = no window, copy every document
+#   REMOVE_FIELDS /       comma-separated field names to exclude/remove from
+#   REMOVE_FIELD          _source before posting to ES6
 #   ES6_USER / ES6_PW     auth for ES6            (default elastic / $ELASTIC_PW)
 #   ES9_USER / ES9_PW     auth for ES9            (default elastic / $ELASTIC_PW)
 #   STATE_DIR             state + journal dir     (default ./.rollback-state)
@@ -103,10 +104,7 @@ DST_INDEX="${DST_INDEX:-bench-es6}"
 # so ALL and All behave the same -- a mode this expensive should never hinge
 # on the shift key.
 TS_FIELD="${TS_FIELD:-updated_at}"
-case "$(printf '%s' "$TS_FIELD" | tr '[:upper:]' '[:lower:]')" in
-  all) ALL_MODE=true; TS_FIELD=all ;;
-  *)   ALL_MODE=false ;;
-esac
+REMOVE_FIELDS="${REMOVE_FIELDS:-${REMOVE_FIELD:-}}"
 ES6_USER="${ES6_USER:-elastic}"
 ES6_PW="${ES6_PW:-${ELASTIC_PW:-}}"
 ES9_USER="${ES9_USER:-elastic}"
@@ -161,6 +159,27 @@ STATE_DIR="$(cd "$STATE_DIR" && pwd)"
 # pipe cannot be re-read), or it is a cursor that must survive a crash.
 WORK="$STATE_DIR/work"; mkdir -p "$WORK"
 PARTS="$WORK/parts"; mkdir -p "$PARTS"
+
+# Write shared Python helper utilities
+cat <<'PY' >"$WORK/py_helpers.py"
+import json
+
+def remove_path(d, path):
+    parts = path.split('.')
+    for part in parts[:-1]:
+        if isinstance(d, dict) and part in d:
+            d = d[part]
+        else:
+            return
+    if isinstance(d, dict):
+        d.pop(parts[-1], None)
+
+def strip_remove_fields(src, rem_fields_str):
+    if not rem_fields_str or not isinstance(src, dict):
+        return
+    for rf in [f.strip() for f in rem_fields_str.split(',') if f.strip()]:
+        remove_path(src, rf)
+PY
 
 # Durable, and named for the docs that reference them -- do not rename.
 STATE="$STATE_DIR/state.env"
@@ -259,11 +278,9 @@ delta_page_body() {
   local cursor="null"
   [ -s "$cursor_src" ] && cursor="$(cat "$cursor_src")"
   jq -n --arg pit "$pit" --arg since "$since" --arg op "$op" --arg tsf "$TS_FIELD" \
-        --argjson allmode "$ALL_MODE" \
         --argjson size "$PAGE_SIZE" --argjson sa "$cursor" '
-      (if $allmode then { query: {match_all: {}}, sort: [{_shard_doc: "asc"}] }
-       else { query: {range: {($tsf): {($op): $since}}},
-              sort: [{($tsf): "asc"}, {_shard_doc: "asc"}] } end)
+      { query: {range: {($tsf): {($op): $since}}},
+        sort: [{($tsf): "asc"}, {_shard_doc: "asc"}], size: $size }
     + { size: $size }
     + (if $pit == "" then {} else { pit: {id: $pit, keep_alive: "15m"} } end)
     + (if $sa == null then { track_total_hits: true } else { search_after: $sa } end)
@@ -277,11 +294,13 @@ delta_page_body() {
 # source field that happens to be called "all" would otherwise be read as one.
 split_delta_page() {
   local resp="$1" tsf="$TS_FIELD"
-  [ "$ALL_MODE" = true ] && tsf=""
   rm -f "$WORK"/delta.chunk.*.ndjson
-  python3 - "$resp" "$WORK" "$BULK_BYTE_CAP" "$tsf" <<'PY'
+  python3 - "$resp" "$WORK" "$BULK_BYTE_CAP" "$tsf" "$REMOVE_FIELDS" <<'PY'
 import json, sys
-resp, work, cap, tsf = sys.argv[1], sys.argv[2], int(sys.argv[3]), sys.argv[4]
+resp, work, cap, tsf, rem_fields_str = sys.argv[1], sys.argv[2], int(sys.argv[3]), sys.argv[4], sys.argv[5]
+sys.path.insert(0, work)
+from py_helpers import strip_remove_fields
+
 J = lambda o: json.dumps(o, separators=(',', ':'), ensure_ascii=False)
 hits = json.load(open(resp, encoding='utf-8'))['hits']['hits']
 with open(work + '/delta.page.ids', 'w', encoding='utf-8') as f:
@@ -292,7 +311,9 @@ i = sz = 0; out = None
 for h in hits:
     meta = {'_id': h['_id']}
     if h.get('_routing'): meta['routing'] = h['_routing']
-    a, b = J({'index': meta}), J(h.get('_source', {}))
+    src = h.get('_source', {})
+    strip_remove_fields(src, rem_fields_str)
+    a, b = J({'index': meta}), J(src)
     n = len(a.encode()) + len(b.encode()) + 2
     if out is None or (sz > 0 and sz + n > cap):
         if out: out.close(); i += 1
@@ -543,30 +564,24 @@ phase_preflight() {
   fi
   log "   $DST_INDEX is writable"
 
-  local cutover="" effective=""
-  if [ "$ALL_MODE" = true ]; then
-    log "   TS_FIELD=all -- no delta window, phase 1 copies every document"
-    [ -n "$SINCE" ] && warn "SINCE=$SINCE ignored: TS_FIELD=all has no time window"
+  if [ -z "${SINCE:-}" ]; then
+    es9 GET "$ES9_URL/$SRC_INDEX/_mapping" >/dev/null || die "cannot read $SRC_INDEX mapping"
+    SINCE="$(jq -r '.[].mappings._meta.cutover_at // ""' "$RESP")"
+    [ -n "$SINCE" ] || die "_meta.cutover_at missing on $SRC_INDEX -- pass SINCE=<ISO-8601>"
+    log "   cutover_at=$SINCE"
   else
-    if [ -n "$SINCE" ]; then
-      cutover="$SINCE"; log "   using SINCE override: $cutover"
-    else
-      es9 GET "$ES9_URL/$SRC_INDEX/_mapping" >/dev/null || die "cannot read $SRC_INDEX mapping"
-      cutover="$(jq -r '.[].mappings._meta.cutover_at // ""' "$RESP")"
-      [ -n "$cutover" ] || die "_meta.cutover_at missing on $SRC_INDEX -- pass SINCE=<ISO-8601>, or TS_FIELD=all to copy everything"
-      log "   cutover_at=$cutover"
-    fi
-    effective="$(jq -rn --arg t "$cutover" '
-        ($t | fromdateiso8601) as $e
-        | if $e > now then error("future") else ($e | todateiso8601) end
-      ' 2>/dev/null)" \
-      || die "cutover_at is unusable (not ISO-8601, or in the future): $cutover"
-    log "   lower bound: $effective"
+    log "   using SINCE override: $SINCE"
   fi
 
+  SINCE="$(jq -rn --arg t "$SINCE" '
+      ($t | fromdateiso8601) as $e
+      | if $e > now then error("future") else ($e | todateiso8601) end
+    ' 2>/dev/null)" \
+    || die "SINCE / cutover_at is unusable (not ISO-8601, or in the future): $SINCE"
+  log "   since (validated): $SINCE"
+
   # Outputs of this phase, read by cmd_run.
-  PREFLIGHT_CUTOVER_AT="$cutover"
-  PREFLIGHT_SINCE="$effective"
+  PREFLIGHT_SINCE="$SINCE"
 }
 
 # ------------------------------------------------------------ refresh state --
@@ -580,13 +595,9 @@ phase_preflight() {
 # ------------------------------------------------------------------ phase 1 --
 
 phase_delta() {
-  if [ "$ALL_MODE" = true ]; then
-    log "== phase 1: full copy $SRC_INDEX -> $DST_INDEX (TS_FIELD=all) =="
-  else
-    log "== phase 1: delta sync $SRC_INDEX -> $DST_INDEX on $TS_FIELD =="
-  fi
+  log "== phase 1: delta sync $SRC_INDEX -> $DST_INDEX on $TS_FIELD =="
   state_load
-  local since="${EFFECTIVE_SINCE:-}" pit="" BULK_TAG=delta
+  local since="${SINCE:-}" pit="" BULK_TAG=delta
   local synced="${SYNCED:-0}" seen="${SEEN:-0}" deadletters="${DL_COUNT:-0}"
   # `gt` on the first pass; a restart after a PIT expiry switches to `gte` so
   # the whole group sharing the watermark timestamp is re-scanned. With `gt`,
@@ -616,22 +627,10 @@ phase_delta() {
       if grep -q 'search_context_missing\|No search context found' "$RESP" 2>/dev/null; then
         restarts=$((restarts + 1))
         [ "$restarts" -gt 10 ] && die "PIT expired $restarts times without finishing; raise keep_alive or reduce PAGE_SIZE"
+        warn "PIT expired -- reopening, resuming from watermark ${WATERMARK:-$since} (inclusive)"
         pit="$(pit_open "$ES9_URL" "$SRC_INDEX")" || die "cannot reopen PIT"
         printf '%s' "$pit" >"$PIT_FILE"
-        if [ "$ALL_MODE" = true ]; then
-          # _shard_doc is only meaningful inside the PIT that issued it, and
-          # with no watermark there is nothing to resume from -- the walk
-          # starts over. That is safe, not wasteful-only: every write is a
-          # whole-document overwrite of a frozen source, so redoing a page
-          # changes nothing. `seen` restarts with it, or the phase 2 gate
-          # would weigh a two-pass total against a one-pass TOTAL_HITS and
-          # pass a walk that never actually finished.
-          warn "PIT expired -- reopening and restarting the full copy from the beginning"
-          seen=0; state_set SEEN 0
-        else
-          warn "PIT expired -- reopening, resuming from watermark ${WATERMARK:-$since} (inclusive)"
-          state_load; since="${WATERMARK:-$since}"; range_op="gte"
-        fi
+        state_load; since="${WATERMARK:-$since}"; range_op="gte"
         : >"$CURSOR_FILE"
         continue
       fi
@@ -645,11 +644,7 @@ phase_delta() {
 
     if [ "$seen" -eq 0 ] && [ ! -s "$CURSOR_FILE" ]; then
       state_set TOTAL_HITS "$(jq -r '.hits.total.value // .hits.total' "$RESP")"
-      if [ "$ALL_MODE" = true ]; then
-        log "   full copy covers $TOTAL_HITS doc(s)"
-      else
-        log "   delta window contains $TOTAL_HITS doc(s)"
-      fi
+      log "   delta window contains $TOTAL_HITS doc(s)"
     fi
 
     local page_summary hits last_ts
@@ -981,9 +976,25 @@ reconcile_repairs() {
     es9 POST "$ES9_URL/$SRC_INDEX/_mget" application/json "$WORK/repair.mget.json" >/dev/null \
       || die "repair _mget from ES9 failed"
     # Routing travels with the document, same reason as in split_delta_page.
-    jq -c '.docs[] | select(.found)
-           | ({index: ({_id: ._id} + (if ._routing then {routing: ._routing} else {} end))}),
-             ._source' "$RESP" >"$WORK/repair.bulk.ndjson"
+    python3 - "$RESP" "$WORK/repair.bulk.ndjson" "$WORK" "$REMOVE_FIELDS" <<'PY'
+import json, sys
+resp_path, out_path, work, rem_fields_str = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4]
+sys.path.insert(0, work)
+from py_helpers import strip_remove_fields
+
+J = lambda o: json.dumps(o, separators=(',', ':'), ensure_ascii=False)
+docs = json.load(open(resp_path, encoding='utf-8')).get('docs', [])
+with open(out_path, 'w', encoding='utf-8') as out:
+    for d in docs:
+        if not d.get('found'):
+            continue
+        meta = {'_id': d['_id']}
+        if d.get('_routing'):
+            meta['routing'] = d['_routing']
+        src = d.get('_source', {})
+        strip_remove_fields(src, rem_fields_str)
+        out.write(J({'index': meta}) + '\n' + J(src) + '\n')
+PY
     # These ids are absent from ES6 by construction, so the pre-image is
     # "absent" -- journal it directly, no _mget needed. Undo deletes them.
     state_load; seq="${JOURNAL_SEQ:-0}"; n="$(wc -l <"$part" | tr -d ' ')"
@@ -1044,12 +1055,26 @@ phase_verify() {
       cp "$RESP" "$WORK/verify.sample.src.json"
       es6 POST "$ES6_URL/$DST_INDEX/_doc/_mget" application/json "$WORK/verify.sample.mget.json" >/dev/null \
         || die "sample _mget on ES6 failed"
-      python3 - "$WORK/verify.sample.src.json" "$RESP" <<'PY' >"$STATE_DIR/verify_sample_diff"
+      python3 - "$WORK/verify.sample.src.json" "$RESP" "$WORK" "$REMOVE_FIELDS" <<'PY' >"$STATE_DIR/verify_sample_diff"
 import json, sys
-def srcmap(p):
+work, rem_fields_str = sys.argv[3], (sys.argv[4] if len(sys.argv) > 4 else "")
+sys.path.insert(0, work)
+from py_helpers import strip_remove_fields
+
+def srcmap(p, strip_fields=False):
     docs = json.load(open(p, encoding='utf-8'))['docs']
-    return {d['_id']: (d.get('_source') if d.get('found') else None) for d in docs}
-A, B = srcmap(sys.argv[1]), srcmap(sys.argv[2])
+    res = {}
+    for d in docs:
+        if not d.get('found'):
+            res[d['_id']] = None
+            continue
+        src = d.get('_source')
+        if strip_fields:
+            strip_remove_fields(src, rem_fields_str)
+        res[d['_id']] = src
+    return res
+
+A, B = srcmap(sys.argv[1], strip_fields=True), srcmap(sys.argv[2], strip_fields=False)
 for k in sorted(A):
     if A[k] != B.get(k): print(k)
 PY
@@ -1148,10 +1173,10 @@ cmd_run() {
   rm -f "$CURSOR_FILE" "$PIT_FILE"; : >"$DEADLETTER"
   phase_preflight
   state_set RUN_ID "$(date -u +%Y%m%dT%H%M%SZ)"
-  state_set CUTOVER_AT "$PREFLIGHT_CUTOVER_AT"
-  state_set EFFECTIVE_SINCE "$PREFLIGHT_SINCE"
+  state_set SINCE "$PREFLIGHT_SINCE"
   state_set RUN_SRC_INDEX "$SRC_INDEX"; state_set RUN_DST_INDEX "$DST_INDEX"
   state_set RUN_TS_FIELD "$TS_FIELD"
+  state_set RUN_REMOVE_FIELDS "$REMOVE_FIELDS"
   state_set SYNCED 0; state_set SEEN 0; state_set DL_COUNT 0; state_set JOURNAL_SEQ 0
   state_set PHASE DELTA_SYNC
   pipeline
@@ -1170,6 +1195,8 @@ cmd_resume() {
   # window, and switching to or away from `all` redefines what they mean.
   [ "${RUN_TS_FIELD:-$TS_FIELD}" = "$TS_FIELD" ] \
     || die "state belongs to TS_FIELD=${RUN_TS_FIELD} (you passed $TS_FIELD) -- 'reset' to start over"
+  [ "${RUN_REMOVE_FIELDS:-$REMOVE_FIELDS}" = "$REMOVE_FIELDS" ] \
+    || die "state belongs to REMOVE_FIELDS=${RUN_REMOVE_FIELDS} (you passed $REMOVE_FIELDS) -- 'reset' to start over"
   log "resuming from phase=$PHASE (seen=${SEEN:-0} synced=${SYNCED:-0})"
   pipeline
 }
@@ -1178,18 +1205,18 @@ cmd_status() {
   state_load
   [ -n "${PHASE:-}" ] || { echo "no run in $STATE_DIR"; return 0; }
   cat <<EOF
-state dir      : $STATE_DIR
-run id         : ${RUN_ID:-?}
-phase          : $PHASE
-ts field       : ${RUN_TS_FIELD:-?}
-cutover_at     : ${CUTOVER_AT:-(none: full copy)}
-lower bound    : ${EFFECTIVE_SINCE:-(none: full copy)}
-phase 1 total  : ${TOTAL_HITS:-?}
-seen / synced  : ${SEEN:-0} / ${SYNCED:-0}
-dead letters   : ${DL_COUNT:-0}   ($DEADLETTER)
-deleted        : ${DELETED:-0}
-repaired       : ${REPAIRED:-0}
-journal rows   : ${JOURNAL_SEQ:-0}   ($JOURNAL)
+State Dir      : $STATE_DIR
+Run ID         : ${RUN_ID:-?}
+Phase          : $PHASE
+Timestamp field: ${RUN_TS_FIELD:-?}
+Remove fields  : ${RUN_REMOVE_FIELDS:-${REMOVE_FIELDS:-(none)}}
+Cut over       : ${SINCE:-?}
+Phase 1 total  : ${TOTAL_HITS:-?}
+Seen / Synced  : ${SEEN:-0} / ${SYNCED:-0}
+Dead Letters   : ${DL_COUNT:-0}   ($DEADLETTER)
+Deleted        : ${DELETED:-0}
+Repaired       : ${REPAIRED:-0}
+Journal Rows   : ${JOURNAL_SEQ:-0}   ($JOURNAL)
 EOF
   [ "${DL_COUNT:-0}" -gt 0 ] && deadletter_summary
   case "$PHASE" in
@@ -1220,12 +1247,7 @@ usage() {
 }
 
 main() {
-  # Deferred so a page in flight finishes and checkpoints instead of being
-  # torn in half. Worst case one page is redone on resume.
   trap 'INTERRUPTED=1; echo; echo ">> interrupt received, finishing current page..."' INT TERM
-  # Every command that touches a cluster works on the concrete index, not the
-  # alias -- including resume and undo, which never run preflight. status and
-  # reset read local files only, so they stay offline.
   case "${1:-}" in
     preflight|run|resume|verify|undo) resolve_aliases ;;
   esac

@@ -57,7 +57,7 @@ ES_URL = os.environ.get("ES_URL", "http://localhost:9200").rstrip("/")
 ES_USER = os.environ.get("ES_USER", "elastic")
 ES_PW = os.environ.get("ES_PW", "")
 INDEX = os.environ.get("INDEX", "bench-es6")
-TOTAL = int(os.environ.get("TOTAL", "1000000"))
+TOTAL = int(os.environ.get("TOTAL", "100000"))
 BATCH = int(os.environ.get("BATCH", "10000"))
 WORKERS = int(os.environ.get("WORKERS", str(cpu_count())))
 RESET = os.environ.get("RESET", "true").lower() == "true"

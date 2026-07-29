@@ -451,14 +451,34 @@ Dominant costs are the Phase 1 delta walk and the two Phase 3 ID walks:
 - **External sort with a bounded memory budget**, so the diff scales beyond
   available RAM.
 
-**Two standard optimizations deliberately skipped.** *Disabling
-`refresh_interval`* is the usual bulk-load advice, but explicit `_refresh`
-calls at the end of Phases 1, 3 and 4 already make writes visible to the ID
-export, whereas a periodic refresh would add a segment per interval across
-all of Phase 1 and feed the merge queue on the disk that is already the
-bottleneck. *Dropping replicas to zero* would speed writes but removes
-redundancy from the very index being restored, at the moment losing it would
-be least recoverable (C1).
+**Two standard bulk-load optimizations, and why they are not applied.**
+
+*Disabling `refresh_interval` (`-1`) for the duration.* The throughput
+argument for it does hold here: Phase 1's explicit `_refresh` at the end is
+what makes its writes visible to Phase 3's ID export, so the periodic
+refreshes in between produce segments nobody reads and merge work the
+bottleneck disk must absorb. It is skipped for two reasons unrelated to
+throughput. First, it is an **index-setting mutation the journal does not
+cover** — the journal restores documents, not settings, so a run that aborts
+after disabling refresh leaves ES6 with search visibility switched off
+indefinitely, and `undo` will not put it back. That is a poor failure mode on
+the very index the rollback exists to restore, with no snapshot to diff
+settings against (C1). Second, in the normal timestamp-delta case the run is
+not write-bound at all: the delta is small, and Phase 3's two full ID walks —
+pure read paths, unaffected by refresh settings — dominate the window.
+
+The second reason weakens in `TS_FIELD=all` mode, where a full copy genuinely
+is write-bound. Applying it there is defensible provided the setting is
+restored from the exit trap rather than at the end of the happy path (§9).
+
+*Dropping `number_of_replicas` to zero.* In this deployment it buys nothing:
+ES6 runs single-node with replicas configured but unassignable, so the
+cluster sits yellow and writes already go only to primaries — there is no
+replication overhead to remove. Where replicas *are* allocated the trade is
+still poor for a rollback specifically: it strips redundancy from the index
+being restored at the moment losing it is least recoverable (C1), and
+re-replicating afterwards copies the full dataset across the network, giving
+back much of the time saved.
 
 ---
 
@@ -739,6 +759,10 @@ overrun the window.
   removing the largest residual risk in §7.
 - **Persist checkpoints off-host** — `STATE_DIR` on the execution host is a
   single point of failure for recoverability.
+- **Disable `refresh_interval` in `TS_FIELD=all` mode** — the one case where
+  the run is genuinely write-bound (§4.6). Requires restoring the original
+  value from the exit trap, so an aborted run cannot leave ES6 with search
+  visibility switched off.
 - **Soft deletes at the application layer** — a `deleted_at` field makes
   deletes visible to a timestamp window, collapsing Phase 3's full ID
   enumeration into Phase 1 and removing the dominant cost for large indices.
