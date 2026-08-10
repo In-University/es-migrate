@@ -1,0 +1,29 @@
+{
+  "ecommerce_products": {
+    "id": "doc-{{seq}}",
+    "sku": "SKU-{{seq}}",
+    "name": "Product Name {{seq}}",
+    "status": "ACTIVE",
+    "price": "{{price}}",
+    "created_at": "{{timestamp}}",
+    "updated_at": "{{timestamp}}",
+    "modified_at": "{{timestamp}}"
+  },
+  "ecommerce_orders": {
+    "id": "order-{{seq}}",
+    "order_number": "ORD-{{seq}}",
+    "name": "Order Name {{seq}}",
+    "status": "PROCESSING",
+    "created_at": "{{timestamp}}",
+    "updated_at": "{{timestamp}}",
+    "modified_at": "{{timestamp}}"
+  },
+  "default": {
+    "id": "doc-{{seq}}",
+    "name": "Item Name {{seq}}",
+    "status": "ACTIVE",
+    "created_at": "{{timestamp}}",
+    "updated_at": "{{timestamp}}",
+    "modified_at": "{{timestamp}}"
+  }
+}
