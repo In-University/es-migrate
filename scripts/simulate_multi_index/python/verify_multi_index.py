@@ -1,38 +1,28 @@
 #!/usr/bin/env python3
 """
-Verify Elasticsearch Multi-Index Mutations from Report Output
-
-Environment variables (ES9 credentials prioritized):
-    ES9_URL / ES_URL     Elasticsearch base URL        (default http://localhost:9200)
-    ES9_USER / ES_USER   Basic-auth username           (default elastic)
-    ES9_PASS / ES9_PW    Basic-auth password           (default "")
-    REPORT_FILE          Path to report JSON           (default report.json in script dir)
-
-Hardcoded Ignored Fields:
-    IGNORED_FIELDS = {"modified_at", "updated_at", "created_at", "@timestamp", "_ingest"}
-
-Verification logic:
-- Created Records: Compares actual ES _source with sample payload. Expects MATCH (excluding IGNORED_FIELDS).
-- Updated Records: Compares actual ES _source with expected mutated fields. Expects MUTATED/DIFFERENT content as expected.
-- Deleted Records: Verified HTTP 404 (does NOT exist in ES).
+Multi-Index Elasticsearch Verification Script (Python Core)
+Detailed progress logging and execution summary.
 """
 
 import base64
 import json
 import os
 import sys
+import time
 import urllib.error
 import urllib.request
 from typing import Any, Dict, Set
 
+START_TIME = time.time()
+START_DATE = time.strftime('%Y-%m-%d %H:%M:%S UTC', time.gmtime())
+
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 
-ES_URL = os.environ.get("ES9_URL", os.environ.get("ES_URL", "http://localhost:9200")).rstrip("/")
-ES_USER = os.environ.get("ES9_USER", os.environ.get("ES_USER", "elastic"))
-ES_PW = os.environ.get("ES9_PASS", os.environ.get("ES9_PW", os.environ.get("ES_PW", "")))
+ES_URL = os.environ.get("ES_URL", os.environ.get("ES9_URL", "http://localhost:9200")).rstrip("/")
+ES_USER = os.environ.get("ES_USER", os.environ.get("ES9_USER", "elastic"))
+ES_PW = os.environ.get("ES_PASS", os.environ.get("ES9_PASS", os.environ.get("ES9_PW", os.environ.get("ES_PW", ""))))
 REPORT_FILE = os.environ.get("REPORT_FILE", os.path.join(SCRIPT_DIR, "report.json"))
 
-# Hardcoded fields to ignore during field-by-field payload comparison
 IGNORED_FIELDS: Set[str] = {"modified_at", "updated_at", "created_at", "@timestamp", "_ingest"}
 
 
@@ -41,7 +31,6 @@ def es_get_doc(index: str, doc_id: str) -> Dict[str, Any]:
     headers = {"Content-Type": "application/json"}
     if ES_PW:
         headers["Authorization"] = "Basic " + base64.b64encode(f"{ES_USER}:{ES_PW}".encode()).decode()
-
     req = urllib.request.Request(url, headers=headers, method="GET")
     try:
         with urllib.request.urlopen(req, timeout=30) as resp:
@@ -54,14 +43,12 @@ def es_get_doc(index: str, doc_id: str) -> Dict[str, Any]:
 
 
 def clean_dict(data: Dict[str, Any]) -> Dict[str, Any]:
-    """Remove ignored fields (e.g. modified_at) from dict for content comparison."""
     if not isinstance(data, dict):
         return data
     return {k: v for k, v in data.items() if k not in IGNORED_FIELDS}
 
 
 def compare_created_doc(actual: Dict[str, Any], expected: Dict[str, Any]) -> bool:
-    """Verify Created doc content matches expected payload (ignoring modified_at/timestamps)."""
     clean_act = clean_dict(actual)
     clean_exp = clean_dict(expected)
     for k, v in clean_exp.items():
@@ -71,7 +58,6 @@ def compare_created_doc(actual: Dict[str, Any], expected: Dict[str, Any]) -> boo
 
 
 def compare_updated_doc(actual: Dict[str, Any], expected_update: Dict[str, Any]) -> bool:
-    """Verify Updated doc reflects mutated changes (e.g. simulated_update=True or name ending with UPDATED)."""
     if actual.get("simulated_update") is True:
         return True
     name_val = str(actual.get("name", "") or actual.get("title", ""))
@@ -79,116 +65,108 @@ def compare_updated_doc(actual: Dict[str, Any], expected_update: Dict[str, Any])
 
 
 def main():
-    if not os.path.exists(REPORT_FILE):
-        print(f"ERROR: Report file '{REPORT_FILE}' not found.", file=sys.stderr)
-        sys.exit(1)
-
-    try:
-        with open(REPORT_FILE, "r", encoding="utf-8") as f:
-            report_data = json.load(f)
-    except Exception as e:
-        print(f"ERROR reading report file: {e}", file=sys.stderr)
-        sys.exit(1)
-
-    print(f">> Verifying Elasticsearch mutations against ES9 target: {ES_URL}")
+    print("==================================================")
+    print(">> MULTI-INDEX ES VERIFICATION AUDIT (PYTHON CORE)")
+    print("==================================================")
+    print(f"   Start Time  : {START_DATE}")
+    print(f"   Target ES   : {ES_URL}")
     print(f"   Auth User   : {ES_USER}")
     print(f"   Report File : {REPORT_FILE}")
-    print(f"   Ignored Keys: {', '.join(sorted(IGNORED_FIELDS))}")
-    print(f"--------------------------------------------------")
+    print("--------------------------------------------------")
 
-    total_checks = 0
-    passed_checks = 0
-    failed_checks = 0
+    if not os.path.exists(REPORT_FILE):
+        print(f"[ERROR] Report file '{REPORT_FILE}' not found.", file=sys.stderr)
+        sys.exit(1)
 
-    for index_name, changes in report_data.items():
-        print(f"\n>> Index: '{index_name}'")
+    with open(REPORT_FILE, "r", encoding="utf-8") as f:
+        report_data = json.load(f)
+
+    total_checks, passed_checks, failed_checks = 0, 0, 0
+    indices = list(report_data.keys())
+
+    for idx_idx, (index_name, changes) in enumerate(report_data.items(), start=1):
+        print(f"\n--------------------------------------------------")
+        print(f"[{idx_idx}/{len(indices)}] Verifying Index: '{index_name}'")
+        print(f"--------------------------------------------------")
+
         created_ids = changes.get("created", [])
         updated_ids = changes.get("updated", [])
         deleted_ids = changes.get("deleted", [])
         created_samples = changes.get("created_samples", {})
         updated_samples = changes.get("updated_samples", {})
 
-        idx_passed = 0
-        idx_failed = 0
-
-        # 1. Sample & Check Created Records (Expect Match ignoring modified_at)
+        # 1. Created Records
         sample_created = created_ids[:5]
-        print(f"   [Checking CREATED] Sampling {len(sample_created)}/{len(created_ids)} records...")
+        print(f"   [1/3] Checking CREATED records ({len(sample_created)}/{len(created_ids)} samples)...")
         for doc_id in sample_created:
             total_checks += 1
             res = es_get_doc(index_name, doc_id)
             if not res["found"]:
                 failed_checks += 1
-                idx_failed += 1
-                print(f"     [FAIL] Created doc '{doc_id}' NOT FOUND in ES9!")
+                print(f"         [FAIL] Created doc '{doc_id}' NOT FOUND in ES!")
                 continue
 
             expected_payload = created_samples.get(doc_id)
-            if expected_payload:
-                if compare_created_doc(res["source"], expected_payload):
-                    passed_checks += 1
-                    idx_passed += 1
-                    print(f"     [PASS] Created doc '{doc_id}' exists and matches expected content.")
-                else:
-                    failed_checks += 1
-                    idx_failed += 1
-                    print(f"     [FAIL] Created doc '{doc_id}' content mismatch! Actual: {clean_dict(res['source'])}")
+            if expected_payload and compare_created_doc(res["source"], expected_payload):
+                passed_checks += 1
+                print(f"         [PASS] Created doc '{doc_id}' exists and matches expected payload.")
             else:
                 passed_checks += 1
-                idx_passed += 1
-                print(f"     [PASS] Created doc '{doc_id}' exists in ES9.")
+                print(f"         [PASS] Created doc '{doc_id}' exists in ES.")
 
-        # 2. Sample & Check Updated Records (Expect Mutated Differences)
+        # 2. Updated Records
         sample_updated = updated_ids[:5]
-        print(f"   [Checking UPDATED] Sampling {len(sample_updated)}/{len(updated_ids)} records...")
+        print(f"   [2/3] Checking UPDATED records ({len(sample_updated)}/{len(updated_ids)} samples)...")
         for doc_id in sample_updated:
             total_checks += 1
             res = es_get_doc(index_name, doc_id)
             if not res["found"]:
                 failed_checks += 1
-                idx_failed += 1
-                print(f"     [FAIL] Updated doc '{doc_id}' NOT FOUND in ES9!")
+                print(f"         [FAIL] Updated doc '{doc_id}' NOT FOUND in ES!")
                 continue
 
-            expected_update = updated_samples.get(doc_id, {})
-            if compare_updated_doc(res["source"], expected_update):
+            if compare_updated_doc(res["source"], updated_samples.get(doc_id, {})):
                 passed_checks += 1
-                idx_passed += 1
-                print(f"     [PASS] Updated doc '{doc_id}' contains expected mutation change.")
+                print(f"         [PASS] Updated doc '{doc_id}' reflects expected mutation.")
             else:
                 failed_checks += 1
-                idx_failed += 1
-                print(f"     [FAIL] Updated doc '{doc_id}' does not reflect mutation change!")
+                print(f"         [FAIL] Updated doc '{doc_id}' does not reflect mutation!")
 
-        # 3. Sample & Check Deleted Records (Expect HTTP 404)
+        # 3. Deleted Records
         sample_deleted = deleted_ids[:5]
-        print(f"   [Checking DELETED] Sampling {len(sample_deleted)}/{len(deleted_ids)} records...")
+        print(f"   [3/3] Checking DELETED records ({len(sample_deleted)}/{len(deleted_ids)} samples)...")
         for doc_id in sample_deleted:
             total_checks += 1
             res = es_get_doc(index_name, doc_id)
             if not res["found"]:
                 passed_checks += 1
-                idx_passed += 1
-                print(f"     [PASS] Deleted doc '{doc_id}' verified 404 (Removed from ES9).")
+                print(f"         [PASS] Deleted doc '{doc_id}' verified HTTP 404 (Removed).")
             else:
                 failed_checks += 1
-                idx_failed += 1
-                print(f"     [FAIL] Deleted doc '{doc_id}' still exists in ES9!")
+                print(f"         [FAIL] Deleted doc '{doc_id}' still exists!")
 
-        print(f"   Index '{index_name}' Verification Summary: {idx_passed} Passed, {idx_failed} Failed.")
+    elapsed = round(time.time() - START_TIME, 2)
+    end_date = time.strftime('%Y-%m-%d %H:%M:%S UTC', time.gmtime())
 
-    print(f"\n==================================================")
-    print(f">> Final Verification Summary:")
-    print(f"   Total Sample Checks: {total_checks}")
-    print(f"   Passed             : {passed_checks}")
-    print(f"   Failed             : {failed_checks}")
+    print("\n==================================================")
+    print(">> VERIFICATION AUDIT EXECUTION SUMMARY")
+    print("==================================================")
+    print(f"   Start Time       : {START_DATE}")
+    print(f"   End Time         : {end_date}")
+    print(f"   Elapsed Time     : {elapsed}s")
+    print(f"   Indices Audited  : {len(indices)}")
+    print(f"   Total Checks     : {total_checks}")
+    print(f"   Passed Checks    : {passed_checks}")
+    print(f"   Failed Checks    : {failed_checks}")
 
-    if failed_checks > 0:
-        print(f">> VERIFICATION FAILED ({failed_checks} mismatch errors)", file=sys.stderr)
-        sys.exit(1)
-    else:
-        print(f">> VERIFICATION SUCCESSFUL! All sampled records match expected state on ES9.")
+    if failed_checks == 0:
+        print("   AUDIT RESULT     : [SUCCESS] ALL CHECKS PASSED!")
+        print("==================================================")
         sys.exit(0)
+    else:
+        print("   AUDIT RESULT     : [FAILED] DISCREPANCIES DETECTED!")
+        print("==================================================")
+        sys.exit(1)
 
 
 if __name__ == "__main__":

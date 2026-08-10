@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 #
-# Multi-Index Elasticsearch Verification Script (Shell Version)
+# Multi-Index ES Verification Script (100% Pure Shell Script)
+# Detailed progress logging and execution summary for CI/CD tracing.
 #
-# Reads settings directly from env vars:
+# Env Vars:
 #   ES_URL       Elasticsearch Base URL        (default http://localhost:9200)
 #   ES_USER      Basic Auth Username           (default elastic)
 #   ES_PASS      Basic Auth Password           (default "")
@@ -10,85 +11,124 @@
 #
 set -euo pipefail
 
+START_TIME=$(date +%s)
+START_DATE=$(date -u +"%Y-%m-%d %H:%M:%S UTC")
+
 ES_URL="${ES_URL:-${ES9_URL:-http://localhost:9200}}"
+ES_URL="${ES_URL%/}"
 ES_USER="${ES_USER:-${ES9_USER:-elastic}}"
 ES_PW="${ES_PASS:-${ES9_PASS:-${ES9_PW:-${ES_PW:-}}}}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPORT_FILE="${REPORT_FILE:-$SCRIPT_DIR/report.json}"
 
-echo ">> Starting Verification from report: $REPORT_FILE"
-echo "   Target ES: $ES_URL"
+es_curl() {
+  if [ -n "$ES_PW" ]; then
+    curl -fsS -u "$ES_USER:$ES_PW" "$@"
+  else
+    curl -fsS "$@"
+  fi
+}
 
-python -c "
-import os, sys, json, base64, urllib.request, urllib.error
+echo "=================================================="
+echo ">> MULTI-INDEX ES VERIFICATION AUDIT (PURE SHELL)"
+echo "=================================================="
+echo "   Start Time  : $START_DATE"
+echo "   Target ES   : $ES_URL"
+echo "   Auth User   : $ES_USER"
+echo "   Report File : $REPORT_FILE"
+echo "--------------------------------------------------"
 
-ES_URL = os.environ.get('ES_URL', 'http://localhost:9200').rstrip('/')
-ES_USER = os.environ.get('ES_USER', 'elastic')
-ES_PW = os.environ.get('ES_PASS', '')
-REPORT_FILE = os.environ.get('REPORT_FILE', 'report.json')
-IGNORED_FIELDS = {'modified_at', 'updated_at', 'created_at', '@timestamp', '_ingest'}
+if [ ! -f "$REPORT_FILE" ]; then
+  echo "ERROR: Report file '$REPORT_FILE' not found." >&2
+  exit 1
+fi
 
-if not os.path.exists(REPORT_FILE):
-    print(f'ERROR: Report file {REPORT_FILE} not found.', file=sys.stderr)
-    sys.exit(1)
+INDICES=$(jq -r 'keys[]' "$REPORT_FILE")
+NUM_INDICES=$(echo "$INDICES" | wc -w)
 
-with open(REPORT_FILE, 'r', encoding='utf-8') as f:
-    report_data = json.load(f)
+TOTAL=0
+PASSED=0
+FAILED=0
 
-def es_get_doc(index, doc_id):
-    url = f'{ES_URL}/{index}/_doc/{doc_id}'
-    headers = {'Content-Type': 'application/json'}
-    if ES_PW:
-        headers['Authorization'] = 'Basic ' + base64.b64encode(f'{ES_USER}:{ES_PW}'.encode()).decode()
-    req = urllib.request.Request(url, headers=headers, method='GET')
-    try:
-        with urllib.request.urlopen(req, timeout=30) as resp:
-            data = json.loads(resp.read().decode('utf-8'))
-            return {'found': True, 'source': data.get('_source', {})}
-    except urllib.error.HTTPError as e:
-        if e.code == 404: return {'found': False, 'source': {}}
-        raise
+IDX_COUNTER=0
+for INDEX in $INDICES; do
+  IDX_COUNTER=$((IDX_COUNTER + 1))
+  echo ""
+  echo "--------------------------------------------------"
+  echo "[$IDX_COUNTER/$NUM_INDICES] Verifying Index: '$INDEX'"
+  echo "--------------------------------------------------"
 
-total, passed, failed = 0, 0, 0
+  mapfile -t CREATED_SAMPLES < <(jq -r --arg idx "$INDEX" '.[$idx].created[:5][] // empty' "$REPORT_FILE")
+  mapfile -t UPDATED_SAMPLES < <(jq -r --arg idx "$INDEX" '.[$idx].updated[:5][] // empty' "$REPORT_FILE")
+  mapfile -t DELETED_SAMPLES < <(jq -r --arg idx "$INDEX" '.[$idx].deleted[:5][] // empty' "$REPORT_FILE")
 
-for index_name, changes in report_data.items():
-    print(f'\n>> Index: \'{index_name}\'')
-    created = changes.get('created', [])[:5]
-    updated = changes.get('updated', [])[:5]
-    deleted = changes.get('deleted', [])[:5]
+  echo "   [1/3] Checking CREATED records (${#CREATED_SAMPLES[@]} samples)..."
+  for DOC_ID in "${CREATED_SAMPLES[@]}"; do
+    [ -z "$DOC_ID" ] && continue
+    TOTAL=$((TOTAL + 1))
+    STATUS=$(curl -s -o /dev/null -w "%{http_code}" -u "$ES_USER:$ES_PW" "$ES_URL/$INDEX/_doc/$DOC_ID" || true)
+    if [ "$STATUS" -eq 200 ]; then
+      PASSED=$((PASSED + 1))
+      echo "         [PASS] Created doc '$DOC_ID' exists in ES."
+    else
+      FAILED=$((FAILED + 1))
+      echo "         [FAIL] Created doc '$DOC_ID' missing (HTTP $STATUS)!"
+    fi
+  done
 
-    for doc_id in created:
-        total += 1
-        res = es_get_doc(index_name, doc_id)
-        if res['found']:
-            passed += 1
-            print(f'   [PASS] Created doc \'{doc_id}\' exists in ES.')
-        else:
-            failed += 1
-            print(f'   [FAIL] Created doc \'{doc_id}\' missing!')
+  echo "   [2/3] Checking UPDATED records (${#UPDATED_SAMPLES[@]} samples)..."
+  for DOC_ID in "${UPDATED_SAMPLES[@]}"; do
+    [ -z "$DOC_ID" ] && continue
+    TOTAL=$((TOTAL + 1))
+    RESP=$(es_curl -XGET "$ES_URL/$INDEX/_doc/$DOC_ID" 2>/dev/null || echo '{}')
+    IS_UPDATED=$(echo "$RESP" | jq -r '._source.simulated_update // false')
+    NAME_VAL=$(echo "$RESP" | jq -r '._source.name // ""')
+    if [ "$IS_UPDATED" = "true" ] || [[ "$NAME_VAL" == *"UPDATED"* ]]; then
+      PASSED=$((PASSED + 1))
+      echo "         [PASS] Updated doc '$DOC_ID' reflects expected mutation."
+    else
+      FAILED=$((FAILED + 1))
+      echo "         [FAIL] Updated doc '$DOC_ID' mutation missing!"
+    fi
+  done
 
-    for doc_id in updated:
-        total += 1
-        res = es_get_doc(index_name, doc_id)
-        if res['found'] and ('UPDATED' in str(res['source'].get('name', '')) or res['source'].get('simulated_update')):
-            passed += 1
-            print(f'   [PASS] Updated doc \'{doc_id}\' reflects mutation.')
-        else:
-            failed += 1
-            print(f'   [FAIL] Updated doc \'{doc_id}\' mutation missing!')
+  echo "   [3/3] Checking DELETED records (${#DELETED_SAMPLES[@]} samples)..."
+  for DOC_ID in "${DELETED_SAMPLES[@]}"; do
+    [ -z "$DOC_ID" ] && continue
+    TOTAL=$((TOTAL + 1))
+    STATUS=$(curl -s -o /dev/null -w "%{http_code}" -u "$ES_USER:$ES_PW" "$ES_URL/$INDEX/_doc/$DOC_ID" || true)
+    if [ "$STATUS" -eq 404 ]; then
+      PASSED=$((PASSED + 1))
+      echo "         [PASS] Deleted doc '$DOC_ID' verified HTTP 404 (Removed)."
+    else
+      FAILED=$((FAILED + 1))
+      echo "         [FAIL] Deleted doc '$DOC_ID' still exists (HTTP $STATUS)!"
+    fi
+  done
+done
 
-    for doc_id in deleted:
-        total += 1
-        res = es_get_doc(index_name, doc_id)
-        if not res['found']:
-            passed += 1
-            print(f'   [PASS] Deleted doc \'{doc_id}\' verified 404 (Removed).')
-        else:
-            failed += 1
-            print(f'   [FAIL] Deleted doc \'{doc_id}\' still exists!')
+END_TIME=$(date +%s)
+END_DATE=$(date -u +"%Y-%m-%d %H:%M:%S UTC")
+ELAPSED=$((END_TIME - START_TIME))
 
-print(f'\n>> Verification Complete: {passed}/{total} Passed, {failed} Failed.')
-if failed > 0: sys.exit(1)
-"
+echo ""
+echo "=================================================="
+echo ">> VERIFICATION AUDIT EXECUTION SUMMARY"
+echo "=================================================="
+echo "   Start Time       : $START_DATE"
+echo "   End Time         : $END_DATE"
+echo "   Elapsed Time     : ${ELAPSED}s"
+echo "   Indices Audited  : $NUM_INDICES"
+echo "   Total Checks     : $TOTAL"
+echo "   Passed Checks    : $PASSED"
+echo "   Failed Checks    : $FAILED"
 
-echo ">> Verification finished!"
+if [ "$FAILED" -eq 0 ]; then
+  echo "   AUDIT RESULT     : [SUCCESS] ALL CHECKS PASSED!"
+  echo "=================================================="
+  exit 0
+else
+  echo "   AUDIT RESULT     : [FAILED] DISCREPANCIES DETECTED!"
+  echo "=================================================="
+  exit 1
+fi

@@ -1,21 +1,7 @@
 #!/usr/bin/env python3
 """
-Multi-Index ES Mutation Simulator
-
-Environment variables:
-    ES_URL       Elasticsearch base URL        (default http://localhost:9200)
-    ES_USER      Basic-auth username           (default elastic)
-    ES_PASS      Basic-auth password           (default "")
-    INDICES      Target indices (comma-sep)    (default bench-es9)
-    SAMPLE_FILE  Path to sample JSON file or   (default sample_templates.json in script dir)
-                 folder containing JSON files
-    REPORT_FILE  Path to save simple report    (default report.json in script dir)
-    MUTATE_PCT   Fraction of docs to mutate    (default 0.10)
-    CREATE_RATIO Share of Creates              (default 0.10)
-    UPDATE_RATIO Share of Updates              (default 0.70)
-    DELETE_RATIO Share of Deletes              (default 0.20)
-    BATCH        Docs per _bulk request        (default 2000)
-    SEED         Random seed                   (default 42)
+Multi-Index Elasticsearch Mutation Simulator (Python Core)
+Detailed progress logging and execution summary.
 """
 
 import base64
@@ -28,18 +14,22 @@ import urllib.error
 import urllib.request
 from typing import Any, Dict, List
 
+START_TIME = time.time()
+START_DATE = time.strftime('%Y-%m-%d %H:%M:%S UTC', time.gmtime())
+
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 
-ES_URL = os.environ.get("ES_URL", "http://localhost:9200").rstrip("/")
-ES_USER = os.environ.get("ES_USER", "elastic")
-ES_PW = os.environ.get("ES_PASS", os.environ.get("ES_PW", ""))
+ES_URL = os.environ.get("ES_URL", os.environ.get("ES9_URL", "http://localhost:9200")).rstrip("/")
+ES_USER = os.environ.get("ES_USER", os.environ.get("ES9_USER", "elastic"))
+ES_PW = os.environ.get("ES_PASS", os.environ.get("ES9_PASS", os.environ.get("ES9_PW", os.environ.get("ES_PW", ""))))
 INDICES_ENV = os.environ.get("INDICES", os.environ.get("INDEX", ""))
 SAMPLE_FILE = os.environ.get("SAMPLE_FILE", os.path.join(SCRIPT_DIR, "sample_templates.json"))
 REPORT_FILE = os.environ.get("REPORT_FILE", os.path.join(SCRIPT_DIR, "report.json"))
 MUTATE_PCT = float(os.environ.get("MUTATE_PCT", "0.10"))
-CREATE_RATIO = float(os.environ.get("CREATE_RATIO", "0.10"))
-UPDATE_RATIO = float(os.environ.get("UPDATE_RATIO", "0.70"))
-DELETE_RATIO = float(os.environ.get("DELETE_RATIO", "0.20"))
+CREATE_RATIO = float(os.environ.get("CREATE_RATIO", "0.30"))
+UPDATE_RATIO = float(os.environ.get("UPDATE_RATIO", "0.60"))
+DELETE_RATIO = float(os.environ.get("DELETE_RATIO", "0.10"))
+TOTAL_MUTATIONS = os.environ.get("TOTAL_MUTATIONS", "")
 BATCH = int(os.environ.get("BATCH", "2000"))
 SEED = int(os.environ.get("SEED", "42"))
 
@@ -99,9 +89,9 @@ def render_template(template: Any, seq: int, doc_id: str, seed: int) -> Any:
             if node in ("{{price}}", "{price}"):
                 return rand_price
             val = node
-            val = val.replace("{{seq}}", str(seq)).replace("{seq}", str(seq))
-            val = val.replace("{{id}}", doc_id).replace("{id}", doc_id)
-            val = val.replace("{{timestamp}}", now_ts).replace("{timestamp}", now_ts)
+            val = val.replace("{{SEQ}}", str(seq)).replace("{{seq}}", str(seq)).replace("{seq}", str(seq))
+            val = val.replace("{{ID}}", doc_id).replace("{{id}}", doc_id).replace("{id}", doc_id)
+            val = val.replace("{{TIMESTAMP}}", now_ts).replace("{{timestamp}}", now_ts).replace("{timestamp}", now_ts)
             val = val.replace("{{random_word}}", rand_word).replace("{random_word}", rand_word)
             val = val.replace("{{name}}", f"Name {seq}").replace("{name}", f"Name {seq}")
             return val
@@ -111,14 +101,12 @@ def render_template(template: Any, seq: int, doc_id: str, seed: int) -> Any:
 
 
 def load_templates() -> Dict[str, Any]:
-    """Load JSON sample templates from either a single file or an entire folder."""
     templates = {}
 
     def add_content(data: Any):
         if isinstance(data, dict):
             for k, v in data.items():
                 if isinstance(v, dict):
-                    # Check if v is wrapped in create_template
                     tmpl = v.get("create_template") or v
                     templates[k] = tmpl
                 else:
@@ -132,28 +120,26 @@ def load_templates() -> Dict[str, Any]:
                         templates[idx_name] = tmpl
 
     if not os.path.exists(SAMPLE_FILE):
-        print(f"Warning: SAMPLE_FILE path '{SAMPLE_FILE}' does not exist.", file=sys.stderr)
         return templates
 
     if os.path.isdir(SAMPLE_FILE):
-        print(f">> Scanning folder for sample JSON templates: {SAMPLE_FILE}")
+        print(f"[INFO] Scanning folder for sample JSON templates: {SAMPLE_FILE}")
         for root, _, files in os.walk(SAMPLE_FILE):
             for file in sorted(files):
                 if file.endswith(".json"):
                     full_path = os.path.join(root, file)
                     try:
                         with open(full_path, "r", encoding="utf-8") as f:
-                            content = json.load(f)
-                            add_content(content)
+                            add_content(json.load(f))
                     except Exception as e:
-                        print(f"Warning: Could not read {full_path}: {e}", file=sys.stderr)
+                        print(f"[WARN] Could not read {full_path}: {e}", file=sys.stderr)
     else:
+        print(f"[INFO] Reading single template file: {SAMPLE_FILE}")
         try:
             with open(SAMPLE_FILE, "r", encoding="utf-8") as f:
-                content = json.load(f)
-                add_content(content)
+                add_content(json.load(f))
         except Exception as e:
-            print(f"Warning: Could not read {SAMPLE_FILE}: {e}", file=sys.stderr)
+            print(f"[WARN] Could not read {SAMPLE_FILE}: {e}", file=sys.stderr)
 
     return templates
 
@@ -170,31 +156,45 @@ def bulk_send(index: str, ndjson_lines: List[str]):
                 print(f"   [Bulk Error] [{op}] ID {meta.get('_id')}: {meta.get('error')}", file=sys.stderr)
 
 
-def simulate_index(index: str, templates: Dict[str, Any]) -> Dict[str, Any]:
-    print(f">> Simulating index '{index}' on {ES_URL}...")
+def simulate_index(index: str, templates: Dict[str, Any], idx_idx: int, total_indices: int) -> Dict[str, Any]:
+    print(f"\n--------------------------------------------------")
+    print(f"[{idx_idx}/{total_indices}] Processing Index: '{index}'")
+    print(f"--------------------------------------------------")
 
+    print("   [1/4] Querying existing document count...")
     try:
         cnt_res = es_http("GET", f"/{index}/_count")
         total_docs = cnt_res.get("count", 0)
+        print(f"         Existing docs count: {total_docs}")
     except Exception as e:
-        print(f"ERROR: Could not query index '{index}': {e}", file=sys.stderr)
+        print(f"[ERROR] Could not query index '{index}': {e}", file=sys.stderr)
         return {"created": [], "updated": [], "deleted": [], "created_samples": {}, "updated_samples": {}}
 
     existing_ids = []
     if total_docs > 0:
+        print("   [2/4] Fetching existing document IDs...")
         search_res = es_http("GET", f"/{index}/_search?size=5000&_source=false")
         hits = search_res.get("hits", {}).get("hits", [])
         existing_ids = [h["_id"] for h in hits]
+        print(f"         Retrieved {len(existing_ids)} existing ID(s).")
 
     if total_docs == 0:
-        create_n = 10
+        create_n = int(TOTAL_MUTATIONS) if TOTAL_MUTATIONS.isdigit() else 10
         update_n = 0
         delete_n = 0
     else:
-        touch_count = max(1, int(total_docs * MUTATE_PCT))
+        if TOTAL_MUTATIONS.isdigit():
+            touch_count = int(TOTAL_MUTATIONS)
+        else:
+            touch_count = max(1, int(total_docs * MUTATE_PCT))
         create_n = int(touch_count * CREATE_RATIO)
         delete_n = min(len(existing_ids), int(touch_count * DELETE_RATIO))
         update_n = max(0, touch_count - create_n - delete_n)
+
+    print("   [3/4] Calculated mutation quotas:")
+    print(f"         + Creates : {create_n}")
+    print(f"         ~ Updates : {update_n}")
+    print(f"         - Deletes : {delete_n}")
 
     rnd = random.Random(SEED + hash(index))
     shuffled_ids = list(existing_ids)
@@ -205,11 +205,11 @@ def simulate_index(index: str, templates: Dict[str, Any]) -> Dict[str, Any]:
     created_ids = []
 
     tmpl = templates.get(index) or templates.get("default") or {
-        "id": "doc-{{seq}}",
-        "name": "Name {{seq}}",
-        "created_at": "{{timestamp}}",
-        "updated_at": "{{timestamp}}",
-        "modified_at": "{{timestamp}}"
+        "id": "doc-{{SEQ}}",
+        "name": "Name {{SEQ}}",
+        "created_at": "{{TIMESTAMP}}",
+        "updated_at": "{{TIMESTAMP}}",
+        "modified_at": "{{TIMESTAMP}}"
     }
 
     bulk_lines = []
@@ -255,12 +255,12 @@ def simulate_index(index: str, templates: Dict[str, Any]) -> Dict[str, Any]:
             bulk_send(index, bulk_lines)
             bulk_lines = []
 
+    print("   [4/4] Sending bulk mutations to Elasticsearch...")
     if bulk_lines:
         bulk_send(index, bulk_lines)
 
     es_http("POST", f"/{index}/_refresh")
-
-    print(f"   Done '{index}': +{len(created_ids)} created, ~{len(update_ids)} updated, -{len(delete_ids)} deleted")
+    print(f"   [STATUS] '{index}' Completed (+ {len(created_ids)} created, ~ {len(update_ids)} updated, - {len(delete_ids)} deleted)")
 
     return {
         "created": created_ids,
@@ -272,9 +272,19 @@ def simulate_index(index: str, templates: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def main():
-    templates = load_templates()
+    print("==================================================")
+    print(">> MULTI-INDEX ES MUTATION SIMULATOR (PYTHON CORE)")
+    print("==================================================")
+    print(f"   Start Time     : {START_DATE}")
+    print(f"   ES URL         : {ES_URL}")
+    print(f"   Auth User      : {ES_USER}")
+    print(f"   Sample Path    : {SAMPLE_FILE}")
+    print(f"   Report File    : {REPORT_FILE}")
+    print(f"   Mutate Fraction: {MUTATE_PCT}")
+    print(f"   C / U / D Ratio: {CREATE_RATIO} / {UPDATE_RATIO} / {DELETE_RATIO}")
+    print("--------------------------------------------------")
 
-    # Determine target indices: from env if set, else from loaded template keys (excluding 'default')
+    templates = load_templates()
     if INDICES_ENV:
         indices = [i.strip() for i in INDICES_ENV.split(",") if i.strip()]
     elif templates:
@@ -282,22 +292,39 @@ def main():
     else:
         indices = ["bench-es9"]
 
-    if not indices:
-        print("ERROR: No target indices specified or discovered.", file=sys.stderr)
-        sys.exit(1)
+    print(f"[INFO] Target Indices ({len(indices)}): {', '.join(indices)}")
+    report_data = {}
 
-    print(f">> Target Indices ({len(indices)}): {', '.join(indices)}")
-    simple_report = {}
-
-    for idx in indices:
-        simple_report[idx] = simulate_index(idx, templates)
+    tot_cr, tot_up, tot_del = 0, 0, 0
+    for idx_idx, idx in enumerate(indices, start=1):
+        res = simulate_index(idx, templates, idx_idx, len(indices))
+        report_data[idx] = res
+        tot_cr += len(res["created"])
+        tot_up += len(res["updated"])
+        tot_del += len(res["deleted"])
 
     try:
         with open(REPORT_FILE, "w", encoding="utf-8") as f:
-            json.dump(simple_report, f, indent=2)
-        print(f">> Report saved to: {REPORT_FILE}")
+            json.dump(report_data, f, indent=2)
     except Exception as e:
-        print(f"ERROR saving report: {e}", file=sys.stderr)
+        print(f"[ERROR] Could not save report: {e}", file=sys.stderr)
+
+    elapsed = round(time.time() - START_TIME, 2)
+    end_date = time.strftime('%Y-%m-%d %H:%M:%S UTC', time.gmtime())
+
+    print("\n==================================================")
+    print(">> SIMULATION EXECUTION SUMMARY")
+    print("==================================================")
+    print(f"   Start Time       : {START_DATE}")
+    print(f"   End Time         : {end_date}")
+    print(f"   Elapsed Time     : {elapsed}s")
+    print(f"   Indices Processed: {len(indices)}")
+    print(f"   Total Created    : + {tot_cr} docs")
+    print(f"   Total Updated    : ~ {tot_up} docs")
+    print(f"   Total Deleted    : - {tot_del} docs")
+    print(f"   Total Mutated    : {tot_cr + tot_up + tot_del} docs")
+    print(f"   Report Saved     : {REPORT_FILE}")
+    print("==================================================")
 
 
 if __name__ == "__main__":
