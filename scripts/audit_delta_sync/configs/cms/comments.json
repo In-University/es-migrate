@@ -1,0 +1,342 @@
+[
+  {
+    "base_path": "/api/v1/cms/comments-171",
+    "es_index": "cms_comments_171",
+    "create_payload": {
+      "id": "com-171",
+      "name": "Sample comments #171",
+      "status": "ACTIVE",
+      "amount": 2565.0
+    },
+    "update_payload": {
+      "name": "Sample comments #171 UPDATED",
+      "status": "ACTIVE",
+      "amount": 5130.0
+    },
+    "patch_payload": {
+      "status": "INACTIVE"
+    },
+    "es_checks": {
+      "create": {
+        "status": "ACTIVE",
+        "amount": 2565.0
+      },
+      "update": {
+        "status": "ACTIVE",
+        "amount": 5130.0
+      },
+      "patch": {
+        "status": "INACTIVE"
+      },
+      "delete": {
+        "is_deleted": true
+      }
+    }
+  },
+  {
+    "base_path": "/api/v2/cms/comments-172",
+    "es_index": "cms_comments_172",
+    "create_payload": {
+      "id": "com-172",
+      "name": "Sample comments #172",
+      "status": "ACTIVE",
+      "amount": 2580.0
+    },
+    "update_payload": {
+      "name": "Sample comments #172 UPDATED",
+      "status": "ACTIVE",
+      "amount": 5160.0
+    },
+    "patch_payload": {
+      "status": "INACTIVE"
+    },
+    "es_checks": {
+      "create": {
+        "status": "ACTIVE",
+        "amount": 2580.0
+      },
+      "update": {
+        "status": "ACTIVE",
+        "amount": 5160.0
+      },
+      "patch": {
+        "status": "INACTIVE"
+      },
+      "delete": {
+        "is_deleted": true
+      }
+    }
+  },
+  {
+    "base_path": "/api/v3/cms/comments-173",
+    "es_index": "cms_comments_173",
+    "create_payload": {
+      "id": "com-173",
+      "name": "Sample comments #173",
+      "status": "ACTIVE",
+      "amount": 2595.0
+    },
+    "update_payload": {
+      "name": "Sample comments #173 UPDATED",
+      "status": "ACTIVE",
+      "amount": 5190.0
+    },
+    "patch_payload": {
+      "status": "INACTIVE"
+    },
+    "es_checks": {
+      "create": {
+        "status": "ACTIVE",
+        "amount": 2595.0
+      },
+      "update": {
+        "status": "ACTIVE",
+        "amount": 5190.0
+      },
+      "patch": {
+        "status": "INACTIVE"
+      },
+      "delete": {
+        "is_deleted": true
+      }
+    }
+  },
+  {
+    "base_path": "/api/v1/cms/comments-174",
+    "es_index": "cms_comments_174",
+    "create_payload": {
+      "id": "com-174",
+      "name": "Sample comments #174",
+      "status": "ACTIVE",
+      "amount": 2610.0
+    },
+    "update_payload": {
+      "name": "Sample comments #174 UPDATED",
+      "status": "ACTIVE",
+      "amount": 5220.0
+    },
+    "patch_payload": {
+      "status": "INACTIVE"
+    },
+    "es_checks": {
+      "create": {
+        "status": "ACTIVE",
+        "amount": 2610.0
+      },
+      "update": {
+        "status": "ACTIVE",
+        "amount": 5220.0
+      },
+      "patch": {
+        "status": "INACTIVE"
+      },
+      "delete": {
+        "is_deleted": true
+      }
+    }
+  },
+  {
+    "base_path": "/api/v2/cms/comments-175",
+    "es_index": "cms_comments_175",
+    "create_payload": {
+      "id": "com-175",
+      "name": "Sample comments #175",
+      "status": "ACTIVE",
+      "amount": 2625.0
+    },
+    "update_payload": {
+      "name": "Sample comments #175 UPDATED",
+      "status": "ACTIVE",
+      "amount": 5250.0
+    },
+    "patch_payload": {
+      "status": "INACTIVE"
+    },
+    "es_checks": {
+      "create": {
+        "status": "ACTIVE",
+        "amount": 2625.0
+      },
+      "update": {
+        "status": "ACTIVE",
+        "amount": 5250.0
+      },
+      "patch": {
+        "status": "INACTIVE"
+      },
+      "delete": {
+        "is_deleted": true
+      }
+    }
+  },
+  {
+    "base_path": "/api/v3/cms/comments-176",
+    "es_index": "cms_comments_176",
+    "create_payload": {
+      "id": "com-176",
+      "name": "Sample comments #176",
+      "status": "ACTIVE",
+      "amount": 2640.0
+    },
+    "update_payload": {
+      "name": "Sample comments #176 UPDATED",
+      "status": "ACTIVE",
+      "amount": 5280.0
+    },
+    "patch_payload": {
+      "status": "INACTIVE"
+    },
+    "es_checks": {
+      "create": {
+        "status": "ACTIVE",
+        "amount": 2640.0
+      },
+      "update": {
+        "status": "ACTIVE",
+        "amount": 5280.0
+      },
+      "patch": {
+        "status": "INACTIVE"
+      },
+      "delete": {
+        "is_deleted": true
+      }
+    }
+  },
+  {
+    "base_path": "/api/v1/cms/comments-177",
+    "es_index": "cms_comments_177",
+    "create_payload": {
+      "id": "com-177",
+      "name": "Sample comments #177",
+      "status": "ACTIVE",
+      "amount": 2655.0
+    },
+    "update_payload": {
+      "name": "Sample comments #177 UPDATED",
+      "status": "ACTIVE",
+      "amount": 5310.0
+    },
+    "patch_payload": {
+      "status": "INACTIVE"
+    },
+    "es_checks": {
+      "create": {
+        "status": "ACTIVE",
+        "amount": 2655.0
+      },
+      "update": {
+        "status": "ACTIVE",
+        "amount": 5310.0
+      },
+      "patch": {
+        "status": "INACTIVE"
+      },
+      "delete": {
+        "is_deleted": true
+      }
+    }
+  },
+  {
+    "base_path": "/api/v2/cms/comments-178",
+    "es_index": "cms_comments_178",
+    "create_payload": {
+      "id": "com-178",
+      "name": "Sample comments #178",
+      "status": "ACTIVE",
+      "amount": 2670.0
+    },
+    "update_payload": {
+      "name": "Sample comments #178 UPDATED",
+      "status": "ACTIVE",
+      "amount": 5340.0
+    },
+    "patch_payload": {
+      "status": "INACTIVE"
+    },
+    "es_checks": {
+      "create": {
+        "status": "ACTIVE",
+        "amount": 2670.0
+      },
+      "update": {
+        "status": "ACTIVE",
+        "amount": 5340.0
+      },
+      "patch": {
+        "status": "INACTIVE"
+      },
+      "delete": {
+        "is_deleted": true
+      }
+    }
+  },
+  {
+    "base_path": "/api/v3/cms/comments-179",
+    "es_index": "cms_comments_179",
+    "create_payload": {
+      "id": "com-179",
+      "name": "Sample comments #179",
+      "status": "ACTIVE",
+      "amount": 2685.0
+    },
+    "update_payload": {
+      "name": "Sample comments #179 UPDATED",
+      "status": "ACTIVE",
+      "amount": 5370.0
+    },
+    "patch_payload": {
+      "status": "INACTIVE"
+    },
+    "es_checks": {
+      "create": {
+        "status": "ACTIVE",
+        "amount": 2685.0
+      },
+      "update": {
+        "status": "ACTIVE",
+        "amount": 5370.0
+      },
+      "patch": {
+        "status": "INACTIVE"
+      },
+      "delete": {
+        "is_deleted": true
+      }
+    }
+  },
+  {
+    "base_path": "/api/v1/cms/comments-180",
+    "es_index": "cms_comments_180",
+    "create_payload": {
+      "id": "com-180",
+      "name": "Sample comments #180",
+      "status": "ACTIVE",
+      "amount": 2700.0
+    },
+    "update_payload": {
+      "name": "Sample comments #180 UPDATED",
+      "status": "ACTIVE",
+      "amount": 5400.0
+    },
+    "patch_payload": {
+      "status": "INACTIVE"
+    },
+    "es_checks": {
+      "create": {
+        "status": "ACTIVE",
+        "amount": 2700.0
+      },
+      "update": {
+        "status": "ACTIVE",
+        "amount": 5400.0
+      },
+      "patch": {
+        "status": "INACTIVE"
+      },
+      "delete": {
+        "is_deleted": true
+      }
+    }
+  }
+]

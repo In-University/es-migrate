@@ -1,0 +1,342 @@
+[
+  {
+    "base_path": "/api/v3/logistics/shipments-131",
+    "es_index": "logistics_shipments_131",
+    "create_payload": {
+      "id": "shi-131",
+      "name": "Sample shipments #131",
+      "status": "ACTIVE",
+      "amount": 1965.0
+    },
+    "update_payload": {
+      "name": "Sample shipments #131 UPDATED",
+      "status": "ACTIVE",
+      "amount": 3930.0
+    },
+    "patch_payload": {
+      "status": "INACTIVE"
+    },
+    "es_checks": {
+      "create": {
+        "status": "ACTIVE",
+        "amount": 1965.0
+      },
+      "update": {
+        "status": "ACTIVE",
+        "amount": 3930.0
+      },
+      "patch": {
+        "status": "INACTIVE"
+      },
+      "delete": {
+        "is_deleted": true
+      }
+    }
+  },
+  {
+    "base_path": "/api/v1/logistics/shipments-132",
+    "es_index": "logistics_shipments_132",
+    "create_payload": {
+      "id": "shi-132",
+      "name": "Sample shipments #132",
+      "status": "ACTIVE",
+      "amount": 1980.0
+    },
+    "update_payload": {
+      "name": "Sample shipments #132 UPDATED",
+      "status": "ACTIVE",
+      "amount": 3960.0
+    },
+    "patch_payload": {
+      "status": "INACTIVE"
+    },
+    "es_checks": {
+      "create": {
+        "status": "ACTIVE",
+        "amount": 1980.0
+      },
+      "update": {
+        "status": "ACTIVE",
+        "amount": 3960.0
+      },
+      "patch": {
+        "status": "INACTIVE"
+      },
+      "delete": {
+        "is_deleted": true
+      }
+    }
+  },
+  {
+    "base_path": "/api/v2/logistics/shipments-133",
+    "es_index": "logistics_shipments_133",
+    "create_payload": {
+      "id": "shi-133",
+      "name": "Sample shipments #133",
+      "status": "ACTIVE",
+      "amount": 1995.0
+    },
+    "update_payload": {
+      "name": "Sample shipments #133 UPDATED",
+      "status": "ACTIVE",
+      "amount": 3990.0
+    },
+    "patch_payload": {
+      "status": "INACTIVE"
+    },
+    "es_checks": {
+      "create": {
+        "status": "ACTIVE",
+        "amount": 1995.0
+      },
+      "update": {
+        "status": "ACTIVE",
+        "amount": 3990.0
+      },
+      "patch": {
+        "status": "INACTIVE"
+      },
+      "delete": {
+        "is_deleted": true
+      }
+    }
+  },
+  {
+    "base_path": "/api/v3/logistics/shipments-134",
+    "es_index": "logistics_shipments_134",
+    "create_payload": {
+      "id": "shi-134",
+      "name": "Sample shipments #134",
+      "status": "ACTIVE",
+      "amount": 2010.0
+    },
+    "update_payload": {
+      "name": "Sample shipments #134 UPDATED",
+      "status": "ACTIVE",
+      "amount": 4020.0
+    },
+    "patch_payload": {
+      "status": "INACTIVE"
+    },
+    "es_checks": {
+      "create": {
+        "status": "ACTIVE",
+        "amount": 2010.0
+      },
+      "update": {
+        "status": "ACTIVE",
+        "amount": 4020.0
+      },
+      "patch": {
+        "status": "INACTIVE"
+      },
+      "delete": {
+        "is_deleted": true
+      }
+    }
+  },
+  {
+    "base_path": "/api/v1/logistics/shipments-135",
+    "es_index": "logistics_shipments_135",
+    "create_payload": {
+      "id": "shi-135",
+      "name": "Sample shipments #135",
+      "status": "ACTIVE",
+      "amount": 2025.0
+    },
+    "update_payload": {
+      "name": "Sample shipments #135 UPDATED",
+      "status": "ACTIVE",
+      "amount": 4050.0
+    },
+    "patch_payload": {
+      "status": "INACTIVE"
+    },
+    "es_checks": {
+      "create": {
+        "status": "ACTIVE",
+        "amount": 2025.0
+      },
+      "update": {
+        "status": "ACTIVE",
+        "amount": 4050.0
+      },
+      "patch": {
+        "status": "INACTIVE"
+      },
+      "delete": {
+        "is_deleted": true
+      }
+    }
+  },
+  {
+    "base_path": "/api/v2/logistics/shipments-136",
+    "es_index": "logistics_shipments_136",
+    "create_payload": {
+      "id": "shi-136",
+      "name": "Sample shipments #136",
+      "status": "ACTIVE",
+      "amount": 2040.0
+    },
+    "update_payload": {
+      "name": "Sample shipments #136 UPDATED",
+      "status": "ACTIVE",
+      "amount": 4080.0
+    },
+    "patch_payload": {
+      "status": "INACTIVE"
+    },
+    "es_checks": {
+      "create": {
+        "status": "ACTIVE",
+        "amount": 2040.0
+      },
+      "update": {
+        "status": "ACTIVE",
+        "amount": 4080.0
+      },
+      "patch": {
+        "status": "INACTIVE"
+      },
+      "delete": {
+        "is_deleted": true
+      }
+    }
+  },
+  {
+    "base_path": "/api/v3/logistics/shipments-137",
+    "es_index": "logistics_shipments_137",
+    "create_payload": {
+      "id": "shi-137",
+      "name": "Sample shipments #137",
+      "status": "ACTIVE",
+      "amount": 2055.0
+    },
+    "update_payload": {
+      "name": "Sample shipments #137 UPDATED",
+      "status": "ACTIVE",
+      "amount": 4110.0
+    },
+    "patch_payload": {
+      "status": "INACTIVE"
+    },
+    "es_checks": {
+      "create": {
+        "status": "ACTIVE",
+        "amount": 2055.0
+      },
+      "update": {
+        "status": "ACTIVE",
+        "amount": 4110.0
+      },
+      "patch": {
+        "status": "INACTIVE"
+      },
+      "delete": {
+        "is_deleted": true
+      }
+    }
+  },
+  {
+    "base_path": "/api/v1/logistics/shipments-138",
+    "es_index": "logistics_shipments_138",
+    "create_payload": {
+      "id": "shi-138",
+      "name": "Sample shipments #138",
+      "status": "ACTIVE",
+      "amount": 2070.0
+    },
+    "update_payload": {
+      "name": "Sample shipments #138 UPDATED",
+      "status": "ACTIVE",
+      "amount": 4140.0
+    },
+    "patch_payload": {
+      "status": "INACTIVE"
+    },
+    "es_checks": {
+      "create": {
+        "status": "ACTIVE",
+        "amount": 2070.0
+      },
+      "update": {
+        "status": "ACTIVE",
+        "amount": 4140.0
+      },
+      "patch": {
+        "status": "INACTIVE"
+      },
+      "delete": {
+        "is_deleted": true
+      }
+    }
+  },
+  {
+    "base_path": "/api/v2/logistics/shipments-139",
+    "es_index": "logistics_shipments_139",
+    "create_payload": {
+      "id": "shi-139",
+      "name": "Sample shipments #139",
+      "status": "ACTIVE",
+      "amount": 2085.0
+    },
+    "update_payload": {
+      "name": "Sample shipments #139 UPDATED",
+      "status": "ACTIVE",
+      "amount": 4170.0
+    },
+    "patch_payload": {
+      "status": "INACTIVE"
+    },
+    "es_checks": {
+      "create": {
+        "status": "ACTIVE",
+        "amount": 2085.0
+      },
+      "update": {
+        "status": "ACTIVE",
+        "amount": 4170.0
+      },
+      "patch": {
+        "status": "INACTIVE"
+      },
+      "delete": {
+        "is_deleted": true
+      }
+    }
+  },
+  {
+    "base_path": "/api/v3/logistics/shipments-140",
+    "es_index": "logistics_shipments_140",
+    "create_payload": {
+      "id": "shi-140",
+      "name": "Sample shipments #140",
+      "status": "ACTIVE",
+      "amount": 2100.0
+    },
+    "update_payload": {
+      "name": "Sample shipments #140 UPDATED",
+      "status": "ACTIVE",
+      "amount": 4200.0
+    },
+    "patch_payload": {
+      "status": "INACTIVE"
+    },
+    "es_checks": {
+      "create": {
+        "status": "ACTIVE",
+        "amount": 2100.0
+      },
+      "update": {
+        "status": "ACTIVE",
+        "amount": 4200.0
+      },
+      "patch": {
+        "status": "INACTIVE"
+      },
+      "delete": {
+        "is_deleted": true
+      }
+    }
+  }
+]

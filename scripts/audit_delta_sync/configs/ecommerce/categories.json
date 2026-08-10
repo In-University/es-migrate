@@ -1,0 +1,342 @@
+[
+  {
+    "base_path": "/api/v3/ecommerce/categories-11",
+    "es_index": "ecommerce_categories_11",
+    "create_payload": {
+      "id": "cat-11",
+      "name": "Sample categories #11",
+      "status": "ACTIVE",
+      "amount": 165.0
+    },
+    "update_payload": {
+      "name": "Sample categories #11 UPDATED",
+      "status": "ACTIVE",
+      "amount": 330.0
+    },
+    "patch_payload": {
+      "status": "INACTIVE"
+    },
+    "es_checks": {
+      "create": {
+        "status": "ACTIVE",
+        "amount": 165.0
+      },
+      "update": {
+        "status": "ACTIVE",
+        "amount": 330.0
+      },
+      "patch": {
+        "status": "INACTIVE"
+      },
+      "delete": {
+        "is_deleted": true
+      }
+    }
+  },
+  {
+    "base_path": "/api/v1/ecommerce/categories-12",
+    "es_index": "ecommerce_categories_12",
+    "create_payload": {
+      "id": "cat-12",
+      "name": "Sample categories #12",
+      "status": "ACTIVE",
+      "amount": 180.0
+    },
+    "update_payload": {
+      "name": "Sample categories #12 UPDATED",
+      "status": "ACTIVE",
+      "amount": 360.0
+    },
+    "patch_payload": {
+      "status": "INACTIVE"
+    },
+    "es_checks": {
+      "create": {
+        "status": "ACTIVE",
+        "amount": 180.0
+      },
+      "update": {
+        "status": "ACTIVE",
+        "amount": 360.0
+      },
+      "patch": {
+        "status": "INACTIVE"
+      },
+      "delete": {
+        "is_deleted": true
+      }
+    }
+  },
+  {
+    "base_path": "/api/v2/ecommerce/categories-13",
+    "es_index": "ecommerce_categories_13",
+    "create_payload": {
+      "id": "cat-13",
+      "name": "Sample categories #13",
+      "status": "ACTIVE",
+      "amount": 195.0
+    },
+    "update_payload": {
+      "name": "Sample categories #13 UPDATED",
+      "status": "ACTIVE",
+      "amount": 390.0
+    },
+    "patch_payload": {
+      "status": "INACTIVE"
+    },
+    "es_checks": {
+      "create": {
+        "status": "ACTIVE",
+        "amount": 195.0
+      },
+      "update": {
+        "status": "ACTIVE",
+        "amount": 390.0
+      },
+      "patch": {
+        "status": "INACTIVE"
+      },
+      "delete": {
+        "is_deleted": true
+      }
+    }
+  },
+  {
+    "base_path": "/api/v3/ecommerce/categories-14",
+    "es_index": "ecommerce_categories_14",
+    "create_payload": {
+      "id": "cat-14",
+      "name": "Sample categories #14",
+      "status": "ACTIVE",
+      "amount": 210.0
+    },
+    "update_payload": {
+      "name": "Sample categories #14 UPDATED",
+      "status": "ACTIVE",
+      "amount": 420.0
+    },
+    "patch_payload": {
+      "status": "INACTIVE"
+    },
+    "es_checks": {
+      "create": {
+        "status": "ACTIVE",
+        "amount": 210.0
+      },
+      "update": {
+        "status": "ACTIVE",
+        "amount": 420.0
+      },
+      "patch": {
+        "status": "INACTIVE"
+      },
+      "delete": {
+        "is_deleted": true
+      }
+    }
+  },
+  {
+    "base_path": "/api/v1/ecommerce/categories-15",
+    "es_index": "ecommerce_categories_15",
+    "create_payload": {
+      "id": "cat-15",
+      "name": "Sample categories #15",
+      "status": "ACTIVE",
+      "amount": 225.0
+    },
+    "update_payload": {
+      "name": "Sample categories #15 UPDATED",
+      "status": "ACTIVE",
+      "amount": 450.0
+    },
+    "patch_payload": {
+      "status": "INACTIVE"
+    },
+    "es_checks": {
+      "create": {
+        "status": "ACTIVE",
+        "amount": 225.0
+      },
+      "update": {
+        "status": "ACTIVE",
+        "amount": 450.0
+      },
+      "patch": {
+        "status": "INACTIVE"
+      },
+      "delete": {
+        "is_deleted": true
+      }
+    }
+  },
+  {
+    "base_path": "/api/v2/ecommerce/categories-16",
+    "es_index": "ecommerce_categories_16",
+    "create_payload": {
+      "id": "cat-16",
+      "name": "Sample categories #16",
+      "status": "ACTIVE",
+      "amount": 240.0
+    },
+    "update_payload": {
+      "name": "Sample categories #16 UPDATED",
+      "status": "ACTIVE",
+      "amount": 480.0
+    },
+    "patch_payload": {
+      "status": "INACTIVE"
+    },
+    "es_checks": {
+      "create": {
+        "status": "ACTIVE",
+        "amount": 240.0
+      },
+      "update": {
+        "status": "ACTIVE",
+        "amount": 480.0
+      },
+      "patch": {
+        "status": "INACTIVE"
+      },
+      "delete": {
+        "is_deleted": true
+      }
+    }
+  },
+  {
+    "base_path": "/api/v3/ecommerce/categories-17",
+    "es_index": "ecommerce_categories_17",
+    "create_payload": {
+      "id": "cat-17",
+      "name": "Sample categories #17",
+      "status": "ACTIVE",
+      "amount": 255.0
+    },
+    "update_payload": {
+      "name": "Sample categories #17 UPDATED",
+      "status": "ACTIVE",
+      "amount": 510.0
+    },
+    "patch_payload": {
+      "status": "INACTIVE"
+    },
+    "es_checks": {
+      "create": {
+        "status": "ACTIVE",
+        "amount": 255.0
+      },
+      "update": {
+        "status": "ACTIVE",
+        "amount": 510.0
+      },
+      "patch": {
+        "status": "INACTIVE"
+      },
+      "delete": {
+        "is_deleted": true
+      }
+    }
+  },
+  {
+    "base_path": "/api/v1/ecommerce/categories-18",
+    "es_index": "ecommerce_categories_18",
+    "create_payload": {
+      "id": "cat-18",
+      "name": "Sample categories #18",
+      "status": "ACTIVE",
+      "amount": 270.0
+    },
+    "update_payload": {
+      "name": "Sample categories #18 UPDATED",
+      "status": "ACTIVE",
+      "amount": 540.0
+    },
+    "patch_payload": {
+      "status": "INACTIVE"
+    },
+    "es_checks": {
+      "create": {
+        "status": "ACTIVE",
+        "amount": 270.0
+      },
+      "update": {
+        "status": "ACTIVE",
+        "amount": 540.0
+      },
+      "patch": {
+        "status": "INACTIVE"
+      },
+      "delete": {
+        "is_deleted": true
+      }
+    }
+  },
+  {
+    "base_path": "/api/v2/ecommerce/categories-19",
+    "es_index": "ecommerce_categories_19",
+    "create_payload": {
+      "id": "cat-19",
+      "name": "Sample categories #19",
+      "status": "ACTIVE",
+      "amount": 285.0
+    },
+    "update_payload": {
+      "name": "Sample categories #19 UPDATED",
+      "status": "ACTIVE",
+      "amount": 570.0
+    },
+    "patch_payload": {
+      "status": "INACTIVE"
+    },
+    "es_checks": {
+      "create": {
+        "status": "ACTIVE",
+        "amount": 285.0
+      },
+      "update": {
+        "status": "ACTIVE",
+        "amount": 570.0
+      },
+      "patch": {
+        "status": "INACTIVE"
+      },
+      "delete": {
+        "is_deleted": true
+      }
+    }
+  },
+  {
+    "base_path": "/api/v3/ecommerce/categories-20",
+    "es_index": "ecommerce_categories_20",
+    "create_payload": {
+      "id": "cat-20",
+      "name": "Sample categories #20",
+      "status": "ACTIVE",
+      "amount": 300.0
+    },
+    "update_payload": {
+      "name": "Sample categories #20 UPDATED",
+      "status": "ACTIVE",
+      "amount": 600.0
+    },
+    "patch_payload": {
+      "status": "INACTIVE"
+    },
+    "es_checks": {
+      "create": {
+        "status": "ACTIVE",
+        "amount": 300.0
+      },
+      "update": {
+        "status": "ACTIVE",
+        "amount": 600.0
+      },
+      "patch": {
+        "status": "INACTIVE"
+      },
+      "delete": {
+        "is_deleted": true
+      }
+    }
+  }
+]

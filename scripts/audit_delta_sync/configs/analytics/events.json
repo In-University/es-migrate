@@ -1,0 +1,342 @@
+[
+  {
+    "base_path": "/api/v2/analytics/events-241",
+    "es_index": "analytics_events_241",
+    "create_payload": {
+      "id": "eve-241",
+      "name": "Sample events #241",
+      "status": "ACTIVE",
+      "amount": 3615.0
+    },
+    "update_payload": {
+      "name": "Sample events #241 UPDATED",
+      "status": "ACTIVE",
+      "amount": 7230.0
+    },
+    "patch_payload": {
+      "status": "INACTIVE"
+    },
+    "es_checks": {
+      "create": {
+        "status": "ACTIVE",
+        "amount": 3615.0
+      },
+      "update": {
+        "status": "ACTIVE",
+        "amount": 7230.0
+      },
+      "patch": {
+        "status": "INACTIVE"
+      },
+      "delete": {
+        "is_deleted": true
+      }
+    }
+  },
+  {
+    "base_path": "/api/v3/analytics/events-242",
+    "es_index": "analytics_events_242",
+    "create_payload": {
+      "id": "eve-242",
+      "name": "Sample events #242",
+      "status": "ACTIVE",
+      "amount": 3630.0
+    },
+    "update_payload": {
+      "name": "Sample events #242 UPDATED",
+      "status": "ACTIVE",
+      "amount": 7260.0
+    },
+    "patch_payload": {
+      "status": "INACTIVE"
+    },
+    "es_checks": {
+      "create": {
+        "status": "ACTIVE",
+        "amount": 3630.0
+      },
+      "update": {
+        "status": "ACTIVE",
+        "amount": 7260.0
+      },
+      "patch": {
+        "status": "INACTIVE"
+      },
+      "delete": {
+        "is_deleted": true
+      }
+    }
+  },
+  {
+    "base_path": "/api/v1/analytics/events-243",
+    "es_index": "analytics_events_243",
+    "create_payload": {
+      "id": "eve-243",
+      "name": "Sample events #243",
+      "status": "ACTIVE",
+      "amount": 3645.0
+    },
+    "update_payload": {
+      "name": "Sample events #243 UPDATED",
+      "status": "ACTIVE",
+      "amount": 7290.0
+    },
+    "patch_payload": {
+      "status": "INACTIVE"
+    },
+    "es_checks": {
+      "create": {
+        "status": "ACTIVE",
+        "amount": 3645.0
+      },
+      "update": {
+        "status": "ACTIVE",
+        "amount": 7290.0
+      },
+      "patch": {
+        "status": "INACTIVE"
+      },
+      "delete": {
+        "is_deleted": true
+      }
+    }
+  },
+  {
+    "base_path": "/api/v2/analytics/events-244",
+    "es_index": "analytics_events_244",
+    "create_payload": {
+      "id": "eve-244",
+      "name": "Sample events #244",
+      "status": "ACTIVE",
+      "amount": 3660.0
+    },
+    "update_payload": {
+      "name": "Sample events #244 UPDATED",
+      "status": "ACTIVE",
+      "amount": 7320.0
+    },
+    "patch_payload": {
+      "status": "INACTIVE"
+    },
+    "es_checks": {
+      "create": {
+        "status": "ACTIVE",
+        "amount": 3660.0
+      },
+      "update": {
+        "status": "ACTIVE",
+        "amount": 7320.0
+      },
+      "patch": {
+        "status": "INACTIVE"
+      },
+      "delete": {
+        "is_deleted": true
+      }
+    }
+  },
+  {
+    "base_path": "/api/v3/analytics/events-245",
+    "es_index": "analytics_events_245",
+    "create_payload": {
+      "id": "eve-245",
+      "name": "Sample events #245",
+      "status": "ACTIVE",
+      "amount": 3675.0
+    },
+    "update_payload": {
+      "name": "Sample events #245 UPDATED",
+      "status": "ACTIVE",
+      "amount": 7350.0
+    },
+    "patch_payload": {
+      "status": "INACTIVE"
+    },
+    "es_checks": {
+      "create": {
+        "status": "ACTIVE",
+        "amount": 3675.0
+      },
+      "update": {
+        "status": "ACTIVE",
+        "amount": 7350.0
+      },
+      "patch": {
+        "status": "INACTIVE"
+      },
+      "delete": {
+        "is_deleted": true
+      }
+    }
+  },
+  {
+    "base_path": "/api/v1/analytics/events-246",
+    "es_index": "analytics_events_246",
+    "create_payload": {
+      "id": "eve-246",
+      "name": "Sample events #246",
+      "status": "ACTIVE",
+      "amount": 3690.0
+    },
+    "update_payload": {
+      "name": "Sample events #246 UPDATED",
+      "status": "ACTIVE",
+      "amount": 7380.0
+    },
+    "patch_payload": {
+      "status": "INACTIVE"
+    },
+    "es_checks": {
+      "create": {
+        "status": "ACTIVE",
+        "amount": 3690.0
+      },
+      "update": {
+        "status": "ACTIVE",
+        "amount": 7380.0
+      },
+      "patch": {
+        "status": "INACTIVE"
+      },
+      "delete": {
+        "is_deleted": true
+      }
+    }
+  },
+  {
+    "base_path": "/api/v2/analytics/events-247",
+    "es_index": "analytics_events_247",
+    "create_payload": {
+      "id": "eve-247",
+      "name": "Sample events #247",
+      "status": "ACTIVE",
+      "amount": 3705.0
+    },
+    "update_payload": {
+      "name": "Sample events #247 UPDATED",
+      "status": "ACTIVE",
+      "amount": 7410.0
+    },
+    "patch_payload": {
+      "status": "INACTIVE"
+    },
+    "es_checks": {
+      "create": {
+        "status": "ACTIVE",
+        "amount": 3705.0
+      },
+      "update": {
+        "status": "ACTIVE",
+        "amount": 7410.0
+      },
+      "patch": {
+        "status": "INACTIVE"
+      },
+      "delete": {
+        "is_deleted": true
+      }
+    }
+  },
+  {
+    "base_path": "/api/v3/analytics/events-248",
+    "es_index": "analytics_events_248",
+    "create_payload": {
+      "id": "eve-248",
+      "name": "Sample events #248",
+      "status": "ACTIVE",
+      "amount": 3720.0
+    },
+    "update_payload": {
+      "name": "Sample events #248 UPDATED",
+      "status": "ACTIVE",
+      "amount": 7440.0
+    },
+    "patch_payload": {
+      "status": "INACTIVE"
+    },
+    "es_checks": {
+      "create": {
+        "status": "ACTIVE",
+        "amount": 3720.0
+      },
+      "update": {
+        "status": "ACTIVE",
+        "amount": 7440.0
+      },
+      "patch": {
+        "status": "INACTIVE"
+      },
+      "delete": {
+        "is_deleted": true
+      }
+    }
+  },
+  {
+    "base_path": "/api/v1/analytics/events-249",
+    "es_index": "analytics_events_249",
+    "create_payload": {
+      "id": "eve-249",
+      "name": "Sample events #249",
+      "status": "ACTIVE",
+      "amount": 3735.0
+    },
+    "update_payload": {
+      "name": "Sample events #249 UPDATED",
+      "status": "ACTIVE",
+      "amount": 7470.0
+    },
+    "patch_payload": {
+      "status": "INACTIVE"
+    },
+    "es_checks": {
+      "create": {
+        "status": "ACTIVE",
+        "amount": 3735.0
+      },
+      "update": {
+        "status": "ACTIVE",
+        "amount": 7470.0
+      },
+      "patch": {
+        "status": "INACTIVE"
+      },
+      "delete": {
+        "is_deleted": true
+      }
+    }
+  },
+  {
+    "base_path": "/api/v2/analytics/events-250",
+    "es_index": "analytics_events_250",
+    "create_payload": {
+      "id": "eve-250",
+      "name": "Sample events #250",
+      "status": "ACTIVE",
+      "amount": 3750.0
+    },
+    "update_payload": {
+      "name": "Sample events #250 UPDATED",
+      "status": "ACTIVE",
+      "amount": 7500.0
+    },
+    "patch_payload": {
+      "status": "INACTIVE"
+    },
+    "es_checks": {
+      "create": {
+        "status": "ACTIVE",
+        "amount": 3750.0
+      },
+      "update": {
+        "status": "ACTIVE",
+        "amount": 7500.0
+      },
+      "patch": {
+        "status": "INACTIVE"
+      },
+      "delete": {
+        "is_deleted": true
+      }
+    }
+  }
+]

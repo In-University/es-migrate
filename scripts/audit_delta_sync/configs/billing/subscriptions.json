@@ -1,0 +1,342 @@
+[
+  {
+    "base_path": "/api/v3/billing/subscriptions-101",
+    "es_index": "billing_subscriptions_101",
+    "create_payload": {
+      "id": "sub-101",
+      "name": "Sample subscriptions #101",
+      "status": "ACTIVE",
+      "amount": 1515.0
+    },
+    "update_payload": {
+      "name": "Sample subscriptions #101 UPDATED",
+      "status": "ACTIVE",
+      "amount": 3030.0
+    },
+    "patch_payload": {
+      "status": "INACTIVE"
+    },
+    "es_checks": {
+      "create": {
+        "status": "ACTIVE",
+        "amount": 1515.0
+      },
+      "update": {
+        "status": "ACTIVE",
+        "amount": 3030.0
+      },
+      "patch": {
+        "status": "INACTIVE"
+      },
+      "delete": {
+        "is_deleted": true
+      }
+    }
+  },
+  {
+    "base_path": "/api/v1/billing/subscriptions-102",
+    "es_index": "billing_subscriptions_102",
+    "create_payload": {
+      "id": "sub-102",
+      "name": "Sample subscriptions #102",
+      "status": "ACTIVE",
+      "amount": 1530.0
+    },
+    "update_payload": {
+      "name": "Sample subscriptions #102 UPDATED",
+      "status": "ACTIVE",
+      "amount": 3060.0
+    },
+    "patch_payload": {
+      "status": "INACTIVE"
+    },
+    "es_checks": {
+      "create": {
+        "status": "ACTIVE",
+        "amount": 1530.0
+      },
+      "update": {
+        "status": "ACTIVE",
+        "amount": 3060.0
+      },
+      "patch": {
+        "status": "INACTIVE"
+      },
+      "delete": {
+        "is_deleted": true
+      }
+    }
+  },
+  {
+    "base_path": "/api/v2/billing/subscriptions-103",
+    "es_index": "billing_subscriptions_103",
+    "create_payload": {
+      "id": "sub-103",
+      "name": "Sample subscriptions #103",
+      "status": "ACTIVE",
+      "amount": 1545.0
+    },
+    "update_payload": {
+      "name": "Sample subscriptions #103 UPDATED",
+      "status": "ACTIVE",
+      "amount": 3090.0
+    },
+    "patch_payload": {
+      "status": "INACTIVE"
+    },
+    "es_checks": {
+      "create": {
+        "status": "ACTIVE",
+        "amount": 1545.0
+      },
+      "update": {
+        "status": "ACTIVE",
+        "amount": 3090.0
+      },
+      "patch": {
+        "status": "INACTIVE"
+      },
+      "delete": {
+        "is_deleted": true
+      }
+    }
+  },
+  {
+    "base_path": "/api/v3/billing/subscriptions-104",
+    "es_index": "billing_subscriptions_104",
+    "create_payload": {
+      "id": "sub-104",
+      "name": "Sample subscriptions #104",
+      "status": "ACTIVE",
+      "amount": 1560.0
+    },
+    "update_payload": {
+      "name": "Sample subscriptions #104 UPDATED",
+      "status": "ACTIVE",
+      "amount": 3120.0
+    },
+    "patch_payload": {
+      "status": "INACTIVE"
+    },
+    "es_checks": {
+      "create": {
+        "status": "ACTIVE",
+        "amount": 1560.0
+      },
+      "update": {
+        "status": "ACTIVE",
+        "amount": 3120.0
+      },
+      "patch": {
+        "status": "INACTIVE"
+      },
+      "delete": {
+        "is_deleted": true
+      }
+    }
+  },
+  {
+    "base_path": "/api/v1/billing/subscriptions-105",
+    "es_index": "billing_subscriptions_105",
+    "create_payload": {
+      "id": "sub-105",
+      "name": "Sample subscriptions #105",
+      "status": "ACTIVE",
+      "amount": 1575.0
+    },
+    "update_payload": {
+      "name": "Sample subscriptions #105 UPDATED",
+      "status": "ACTIVE",
+      "amount": 3150.0
+    },
+    "patch_payload": {
+      "status": "INACTIVE"
+    },
+    "es_checks": {
+      "create": {
+        "status": "ACTIVE",
+        "amount": 1575.0
+      },
+      "update": {
+        "status": "ACTIVE",
+        "amount": 3150.0
+      },
+      "patch": {
+        "status": "INACTIVE"
+      },
+      "delete": {
+        "is_deleted": true
+      }
+    }
+  },
+  {
+    "base_path": "/api/v2/billing/subscriptions-106",
+    "es_index": "billing_subscriptions_106",
+    "create_payload": {
+      "id": "sub-106",
+      "name": "Sample subscriptions #106",
+      "status": "ACTIVE",
+      "amount": 1590.0
+    },
+    "update_payload": {
+      "name": "Sample subscriptions #106 UPDATED",
+      "status": "ACTIVE",
+      "amount": 3180.0
+    },
+    "patch_payload": {
+      "status": "INACTIVE"
+    },
+    "es_checks": {
+      "create": {
+        "status": "ACTIVE",
+        "amount": 1590.0
+      },
+      "update": {
+        "status": "ACTIVE",
+        "amount": 3180.0
+      },
+      "patch": {
+        "status": "INACTIVE"
+      },
+      "delete": {
+        "is_deleted": true
+      }
+    }
+  },
+  {
+    "base_path": "/api/v3/billing/subscriptions-107",
+    "es_index": "billing_subscriptions_107",
+    "create_payload": {
+      "id": "sub-107",
+      "name": "Sample subscriptions #107",
+      "status": "ACTIVE",
+      "amount": 1605.0
+    },
+    "update_payload": {
+      "name": "Sample subscriptions #107 UPDATED",
+      "status": "ACTIVE",
+      "amount": 3210.0
+    },
+    "patch_payload": {
+      "status": "INACTIVE"
+    },
+    "es_checks": {
+      "create": {
+        "status": "ACTIVE",
+        "amount": 1605.0
+      },
+      "update": {
+        "status": "ACTIVE",
+        "amount": 3210.0
+      },
+      "patch": {
+        "status": "INACTIVE"
+      },
+      "delete": {
+        "is_deleted": true
+      }
+    }
+  },
+  {
+    "base_path": "/api/v1/billing/subscriptions-108",
+    "es_index": "billing_subscriptions_108",
+    "create_payload": {
+      "id": "sub-108",
+      "name": "Sample subscriptions #108",
+      "status": "ACTIVE",
+      "amount": 1620.0
+    },
+    "update_payload": {
+      "name": "Sample subscriptions #108 UPDATED",
+      "status": "ACTIVE",
+      "amount": 3240.0
+    },
+    "patch_payload": {
+      "status": "INACTIVE"
+    },
+    "es_checks": {
+      "create": {
+        "status": "ACTIVE",
+        "amount": 1620.0
+      },
+      "update": {
+        "status": "ACTIVE",
+        "amount": 3240.0
+      },
+      "patch": {
+        "status": "INACTIVE"
+      },
+      "delete": {
+        "is_deleted": true
+      }
+    }
+  },
+  {
+    "base_path": "/api/v2/billing/subscriptions-109",
+    "es_index": "billing_subscriptions_109",
+    "create_payload": {
+      "id": "sub-109",
+      "name": "Sample subscriptions #109",
+      "status": "ACTIVE",
+      "amount": 1635.0
+    },
+    "update_payload": {
+      "name": "Sample subscriptions #109 UPDATED",
+      "status": "ACTIVE",
+      "amount": 3270.0
+    },
+    "patch_payload": {
+      "status": "INACTIVE"
+    },
+    "es_checks": {
+      "create": {
+        "status": "ACTIVE",
+        "amount": 1635.0
+      },
+      "update": {
+        "status": "ACTIVE",
+        "amount": 3270.0
+      },
+      "patch": {
+        "status": "INACTIVE"
+      },
+      "delete": {
+        "is_deleted": true
+      }
+    }
+  },
+  {
+    "base_path": "/api/v3/billing/subscriptions-110",
+    "es_index": "billing_subscriptions_110",
+    "create_payload": {
+      "id": "sub-110",
+      "name": "Sample subscriptions #110",
+      "status": "ACTIVE",
+      "amount": 1650.0
+    },
+    "update_payload": {
+      "name": "Sample subscriptions #110 UPDATED",
+      "status": "ACTIVE",
+      "amount": 3300.0
+    },
+    "patch_payload": {
+      "status": "INACTIVE"
+    },
+    "es_checks": {
+      "create": {
+        "status": "ACTIVE",
+        "amount": 1650.0
+      },
+      "update": {
+        "status": "ACTIVE",
+        "amount": 3300.0
+      },
+      "patch": {
+        "status": "INACTIVE"
+      },
+      "delete": {
+        "is_deleted": true
+      }
+    }
+  }
+]

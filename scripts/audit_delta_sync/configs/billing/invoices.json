@@ -1,0 +1,342 @@
+[
+  {
+    "base_path": "/api/v1/billing/invoices-81",
+    "es_index": "billing_invoices_81",
+    "create_payload": {
+      "id": "inv-81",
+      "name": "Sample invoices #81",
+      "status": "ACTIVE",
+      "amount": 1215.0
+    },
+    "update_payload": {
+      "name": "Sample invoices #81 UPDATED",
+      "status": "ACTIVE",
+      "amount": 2430.0
+    },
+    "patch_payload": {
+      "status": "INACTIVE"
+    },
+    "es_checks": {
+      "create": {
+        "status": "ACTIVE",
+        "amount": 1215.0
+      },
+      "update": {
+        "status": "ACTIVE",
+        "amount": 2430.0
+      },
+      "patch": {
+        "status": "INACTIVE"
+      },
+      "delete": {
+        "is_deleted": true
+      }
+    }
+  },
+  {
+    "base_path": "/api/v2/billing/invoices-82",
+    "es_index": "billing_invoices_82",
+    "create_payload": {
+      "id": "inv-82",
+      "name": "Sample invoices #82",
+      "status": "ACTIVE",
+      "amount": 1230.0
+    },
+    "update_payload": {
+      "name": "Sample invoices #82 UPDATED",
+      "status": "ACTIVE",
+      "amount": 2460.0
+    },
+    "patch_payload": {
+      "status": "INACTIVE"
+    },
+    "es_checks": {
+      "create": {
+        "status": "ACTIVE",
+        "amount": 1230.0
+      },
+      "update": {
+        "status": "ACTIVE",
+        "amount": 2460.0
+      },
+      "patch": {
+        "status": "INACTIVE"
+      },
+      "delete": {
+        "is_deleted": true
+      }
+    }
+  },
+  {
+    "base_path": "/api/v3/billing/invoices-83",
+    "es_index": "billing_invoices_83",
+    "create_payload": {
+      "id": "inv-83",
+      "name": "Sample invoices #83",
+      "status": "ACTIVE",
+      "amount": 1245.0
+    },
+    "update_payload": {
+      "name": "Sample invoices #83 UPDATED",
+      "status": "ACTIVE",
+      "amount": 2490.0
+    },
+    "patch_payload": {
+      "status": "INACTIVE"
+    },
+    "es_checks": {
+      "create": {
+        "status": "ACTIVE",
+        "amount": 1245.0
+      },
+      "update": {
+        "status": "ACTIVE",
+        "amount": 2490.0
+      },
+      "patch": {
+        "status": "INACTIVE"
+      },
+      "delete": {
+        "is_deleted": true
+      }
+    }
+  },
+  {
+    "base_path": "/api/v1/billing/invoices-84",
+    "es_index": "billing_invoices_84",
+    "create_payload": {
+      "id": "inv-84",
+      "name": "Sample invoices #84",
+      "status": "ACTIVE",
+      "amount": 1260.0
+    },
+    "update_payload": {
+      "name": "Sample invoices #84 UPDATED",
+      "status": "ACTIVE",
+      "amount": 2520.0
+    },
+    "patch_payload": {
+      "status": "INACTIVE"
+    },
+    "es_checks": {
+      "create": {
+        "status": "ACTIVE",
+        "amount": 1260.0
+      },
+      "update": {
+        "status": "ACTIVE",
+        "amount": 2520.0
+      },
+      "patch": {
+        "status": "INACTIVE"
+      },
+      "delete": {
+        "is_deleted": true
+      }
+    }
+  },
+  {
+    "base_path": "/api/v2/billing/invoices-85",
+    "es_index": "billing_invoices_85",
+    "create_payload": {
+      "id": "inv-85",
+      "name": "Sample invoices #85",
+      "status": "ACTIVE",
+      "amount": 1275.0
+    },
+    "update_payload": {
+      "name": "Sample invoices #85 UPDATED",
+      "status": "ACTIVE",
+      "amount": 2550.0
+    },
+    "patch_payload": {
+      "status": "INACTIVE"
+    },
+    "es_checks": {
+      "create": {
+        "status": "ACTIVE",
+        "amount": 1275.0
+      },
+      "update": {
+        "status": "ACTIVE",
+        "amount": 2550.0
+      },
+      "patch": {
+        "status": "INACTIVE"
+      },
+      "delete": {
+        "is_deleted": true
+      }
+    }
+  },
+  {
+    "base_path": "/api/v3/billing/invoices-86",
+    "es_index": "billing_invoices_86",
+    "create_payload": {
+      "id": "inv-86",
+      "name": "Sample invoices #86",
+      "status": "ACTIVE",
+      "amount": 1290.0
+    },
+    "update_payload": {
+      "name": "Sample invoices #86 UPDATED",
+      "status": "ACTIVE",
+      "amount": 2580.0
+    },
+    "patch_payload": {
+      "status": "INACTIVE"
+    },
+    "es_checks": {
+      "create": {
+        "status": "ACTIVE",
+        "amount": 1290.0
+      },
+      "update": {
+        "status": "ACTIVE",
+        "amount": 2580.0
+      },
+      "patch": {
+        "status": "INACTIVE"
+      },
+      "delete": {
+        "is_deleted": true
+      }
+    }
+  },
+  {
+    "base_path": "/api/v1/billing/invoices-87",
+    "es_index": "billing_invoices_87",
+    "create_payload": {
+      "id": "inv-87",
+      "name": "Sample invoices #87",
+      "status": "ACTIVE",
+      "amount": 1305.0
+    },
+    "update_payload": {
+      "name": "Sample invoices #87 UPDATED",
+      "status": "ACTIVE",
+      "amount": 2610.0
+    },
+    "patch_payload": {
+      "status": "INACTIVE"
+    },
+    "es_checks": {
+      "create": {
+        "status": "ACTIVE",
+        "amount": 1305.0
+      },
+      "update": {
+        "status": "ACTIVE",
+        "amount": 2610.0
+      },
+      "patch": {
+        "status": "INACTIVE"
+      },
+      "delete": {
+        "is_deleted": true
+      }
+    }
+  },
+  {
+    "base_path": "/api/v2/billing/invoices-88",
+    "es_index": "billing_invoices_88",
+    "create_payload": {
+      "id": "inv-88",
+      "name": "Sample invoices #88",
+      "status": "ACTIVE",
+      "amount": 1320.0
+    },
+    "update_payload": {
+      "name": "Sample invoices #88 UPDATED",
+      "status": "ACTIVE",
+      "amount": 2640.0
+    },
+    "patch_payload": {
+      "status": "INACTIVE"
+    },
+    "es_checks": {
+      "create": {
+        "status": "ACTIVE",
+        "amount": 1320.0
+      },
+      "update": {
+        "status": "ACTIVE",
+        "amount": 2640.0
+      },
+      "patch": {
+        "status": "INACTIVE"
+      },
+      "delete": {
+        "is_deleted": true
+      }
+    }
+  },
+  {
+    "base_path": "/api/v3/billing/invoices-89",
+    "es_index": "billing_invoices_89",
+    "create_payload": {
+      "id": "inv-89",
+      "name": "Sample invoices #89",
+      "status": "ACTIVE",
+      "amount": 1335.0
+    },
+    "update_payload": {
+      "name": "Sample invoices #89 UPDATED",
+      "status": "ACTIVE",
+      "amount": 2670.0
+    },
+    "patch_payload": {
+      "status": "INACTIVE"
+    },
+    "es_checks": {
+      "create": {
+        "status": "ACTIVE",
+        "amount": 1335.0
+      },
+      "update": {
+        "status": "ACTIVE",
+        "amount": 2670.0
+      },
+      "patch": {
+        "status": "INACTIVE"
+      },
+      "delete": {
+        "is_deleted": true
+      }
+    }
+  },
+  {
+    "base_path": "/api/v1/billing/invoices-90",
+    "es_index": "billing_invoices_90",
+    "create_payload": {
+      "id": "inv-90",
+      "name": "Sample invoices #90",
+      "status": "ACTIVE",
+      "amount": 1350.0
+    },
+    "update_payload": {
+      "name": "Sample invoices #90 UPDATED",
+      "status": "ACTIVE",
+      "amount": 2700.0
+    },
+    "patch_payload": {
+      "status": "INACTIVE"
+    },
+    "es_checks": {
+      "create": {
+        "status": "ACTIVE",
+        "amount": 1350.0
+      },
+      "update": {
+        "status": "ACTIVE",
+        "amount": 2700.0
+      },
+      "patch": {
+        "status": "INACTIVE"
+      },
+      "delete": {
+        "is_deleted": true
+      }
+    }
+  }
+]

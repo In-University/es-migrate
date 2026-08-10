@@ -1,0 +1,342 @@
+[
+  {
+    "base_path": "/api/v2/iam/permissions-61",
+    "es_index": "iam_permissions_61",
+    "create_payload": {
+      "id": "per-61",
+      "name": "Sample permissions #61",
+      "status": "ACTIVE",
+      "amount": 915.0
+    },
+    "update_payload": {
+      "name": "Sample permissions #61 UPDATED",
+      "status": "ACTIVE",
+      "amount": 1830.0
+    },
+    "patch_payload": {
+      "status": "INACTIVE"
+    },
+    "es_checks": {
+      "create": {
+        "status": "ACTIVE",
+        "amount": 915.0
+      },
+      "update": {
+        "status": "ACTIVE",
+        "amount": 1830.0
+      },
+      "patch": {
+        "status": "INACTIVE"
+      },
+      "delete": {
+        "is_deleted": true
+      }
+    }
+  },
+  {
+    "base_path": "/api/v3/iam/permissions-62",
+    "es_index": "iam_permissions_62",
+    "create_payload": {
+      "id": "per-62",
+      "name": "Sample permissions #62",
+      "status": "ACTIVE",
+      "amount": 930.0
+    },
+    "update_payload": {
+      "name": "Sample permissions #62 UPDATED",
+      "status": "ACTIVE",
+      "amount": 1860.0
+    },
+    "patch_payload": {
+      "status": "INACTIVE"
+    },
+    "es_checks": {
+      "create": {
+        "status": "ACTIVE",
+        "amount": 930.0
+      },
+      "update": {
+        "status": "ACTIVE",
+        "amount": 1860.0
+      },
+      "patch": {
+        "status": "INACTIVE"
+      },
+      "delete": {
+        "is_deleted": true
+      }
+    }
+  },
+  {
+    "base_path": "/api/v1/iam/permissions-63",
+    "es_index": "iam_permissions_63",
+    "create_payload": {
+      "id": "per-63",
+      "name": "Sample permissions #63",
+      "status": "ACTIVE",
+      "amount": 945.0
+    },
+    "update_payload": {
+      "name": "Sample permissions #63 UPDATED",
+      "status": "ACTIVE",
+      "amount": 1890.0
+    },
+    "patch_payload": {
+      "status": "INACTIVE"
+    },
+    "es_checks": {
+      "create": {
+        "status": "ACTIVE",
+        "amount": 945.0
+      },
+      "update": {
+        "status": "ACTIVE",
+        "amount": 1890.0
+      },
+      "patch": {
+        "status": "INACTIVE"
+      },
+      "delete": {
+        "is_deleted": true
+      }
+    }
+  },
+  {
+    "base_path": "/api/v2/iam/permissions-64",
+    "es_index": "iam_permissions_64",
+    "create_payload": {
+      "id": "per-64",
+      "name": "Sample permissions #64",
+      "status": "ACTIVE",
+      "amount": 960.0
+    },
+    "update_payload": {
+      "name": "Sample permissions #64 UPDATED",
+      "status": "ACTIVE",
+      "amount": 1920.0
+    },
+    "patch_payload": {
+      "status": "INACTIVE"
+    },
+    "es_checks": {
+      "create": {
+        "status": "ACTIVE",
+        "amount": 960.0
+      },
+      "update": {
+        "status": "ACTIVE",
+        "amount": 1920.0
+      },
+      "patch": {
+        "status": "INACTIVE"
+      },
+      "delete": {
+        "is_deleted": true
+      }
+    }
+  },
+  {
+    "base_path": "/api/v3/iam/permissions-65",
+    "es_index": "iam_permissions_65",
+    "create_payload": {
+      "id": "per-65",
+      "name": "Sample permissions #65",
+      "status": "ACTIVE",
+      "amount": 975.0
+    },
+    "update_payload": {
+      "name": "Sample permissions #65 UPDATED",
+      "status": "ACTIVE",
+      "amount": 1950.0
+    },
+    "patch_payload": {
+      "status": "INACTIVE"
+    },
+    "es_checks": {
+      "create": {
+        "status": "ACTIVE",
+        "amount": 975.0
+      },
+      "update": {
+        "status": "ACTIVE",
+        "amount": 1950.0
+      },
+      "patch": {
+        "status": "INACTIVE"
+      },
+      "delete": {
+        "is_deleted": true
+      }
+    }
+  },
+  {
+    "base_path": "/api/v1/iam/permissions-66",
+    "es_index": "iam_permissions_66",
+    "create_payload": {
+      "id": "per-66",
+      "name": "Sample permissions #66",
+      "status": "ACTIVE",
+      "amount": 990.0
+    },
+    "update_payload": {
+      "name": "Sample permissions #66 UPDATED",
+      "status": "ACTIVE",
+      "amount": 1980.0
+    },
+    "patch_payload": {
+      "status": "INACTIVE"
+    },
+    "es_checks": {
+      "create": {
+        "status": "ACTIVE",
+        "amount": 990.0
+      },
+      "update": {
+        "status": "ACTIVE",
+        "amount": 1980.0
+      },
+      "patch": {
+        "status": "INACTIVE"
+      },
+      "delete": {
+        "is_deleted": true
+      }
+    }
+  },
+  {
+    "base_path": "/api/v2/iam/permissions-67",
+    "es_index": "iam_permissions_67",
+    "create_payload": {
+      "id": "per-67",
+      "name": "Sample permissions #67",
+      "status": "ACTIVE",
+      "amount": 1005.0
+    },
+    "update_payload": {
+      "name": "Sample permissions #67 UPDATED",
+      "status": "ACTIVE",
+      "amount": 2010.0
+    },
+    "patch_payload": {
+      "status": "INACTIVE"
+    },
+    "es_checks": {
+      "create": {
+        "status": "ACTIVE",
+        "amount": 1005.0
+      },
+      "update": {
+        "status": "ACTIVE",
+        "amount": 2010.0
+      },
+      "patch": {
+        "status": "INACTIVE"
+      },
+      "delete": {
+        "is_deleted": true
+      }
+    }
+  },
+  {
+    "base_path": "/api/v3/iam/permissions-68",
+    "es_index": "iam_permissions_68",
+    "create_payload": {
+      "id": "per-68",
+      "name": "Sample permissions #68",
+      "status": "ACTIVE",
+      "amount": 1020.0
+    },
+    "update_payload": {
+      "name": "Sample permissions #68 UPDATED",
+      "status": "ACTIVE",
+      "amount": 2040.0
+    },
+    "patch_payload": {
+      "status": "INACTIVE"
+    },
+    "es_checks": {
+      "create": {
+        "status": "ACTIVE",
+        "amount": 1020.0
+      },
+      "update": {
+        "status": "ACTIVE",
+        "amount": 2040.0
+      },
+      "patch": {
+        "status": "INACTIVE"
+      },
+      "delete": {
+        "is_deleted": true
+      }
+    }
+  },
+  {
+    "base_path": "/api/v1/iam/permissions-69",
+    "es_index": "iam_permissions_69",
+    "create_payload": {
+      "id": "per-69",
+      "name": "Sample permissions #69",
+      "status": "ACTIVE",
+      "amount": 1035.0
+    },
+    "update_payload": {
+      "name": "Sample permissions #69 UPDATED",
+      "status": "ACTIVE",
+      "amount": 2070.0
+    },
+    "patch_payload": {
+      "status": "INACTIVE"
+    },
+    "es_checks": {
+      "create": {
+        "status": "ACTIVE",
+        "amount": 1035.0
+      },
+      "update": {
+        "status": "ACTIVE",
+        "amount": 2070.0
+      },
+      "patch": {
+        "status": "INACTIVE"
+      },
+      "delete": {
+        "is_deleted": true
+      }
+    }
+  },
+  {
+    "base_path": "/api/v2/iam/permissions-70",
+    "es_index": "iam_permissions_70",
+    "create_payload": {
+      "id": "per-70",
+      "name": "Sample permissions #70",
+      "status": "ACTIVE",
+      "amount": 1050.0
+    },
+    "update_payload": {
+      "name": "Sample permissions #70 UPDATED",
+      "status": "ACTIVE",
+      "amount": 2100.0
+    },
+    "patch_payload": {
+      "status": "INACTIVE"
+    },
+    "es_checks": {
+      "create": {
+        "status": "ACTIVE",
+        "amount": 1050.0
+      },
+      "update": {
+        "status": "ACTIVE",
+        "amount": 2100.0
+      },
+      "patch": {
+        "status": "INACTIVE"
+      },
+      "delete": {
+        "is_deleted": true
+      }
+    }
+  }
+]

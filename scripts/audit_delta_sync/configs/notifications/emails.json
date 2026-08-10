@@ -1,0 +1,342 @@
+[
+  {
+    "base_path": "/api/v1/notifications/emails-201",
+    "es_index": "notifications_emails_201",
+    "create_payload": {
+      "id": "ema-201",
+      "name": "Sample emails #201",
+      "status": "ACTIVE",
+      "amount": 3015.0
+    },
+    "update_payload": {
+      "name": "Sample emails #201 UPDATED",
+      "status": "ACTIVE",
+      "amount": 6030.0
+    },
+    "patch_payload": {
+      "status": "INACTIVE"
+    },
+    "es_checks": {
+      "create": {
+        "status": "ACTIVE",
+        "amount": 3015.0
+      },
+      "update": {
+        "status": "ACTIVE",
+        "amount": 6030.0
+      },
+      "patch": {
+        "status": "INACTIVE"
+      },
+      "delete": {
+        "is_deleted": true
+      }
+    }
+  },
+  {
+    "base_path": "/api/v2/notifications/emails-202",
+    "es_index": "notifications_emails_202",
+    "create_payload": {
+      "id": "ema-202",
+      "name": "Sample emails #202",
+      "status": "ACTIVE",
+      "amount": 3030.0
+    },
+    "update_payload": {
+      "name": "Sample emails #202 UPDATED",
+      "status": "ACTIVE",
+      "amount": 6060.0
+    },
+    "patch_payload": {
+      "status": "INACTIVE"
+    },
+    "es_checks": {
+      "create": {
+        "status": "ACTIVE",
+        "amount": 3030.0
+      },
+      "update": {
+        "status": "ACTIVE",
+        "amount": 6060.0
+      },
+      "patch": {
+        "status": "INACTIVE"
+      },
+      "delete": {
+        "is_deleted": true
+      }
+    }
+  },
+  {
+    "base_path": "/api/v3/notifications/emails-203",
+    "es_index": "notifications_emails_203",
+    "create_payload": {
+      "id": "ema-203",
+      "name": "Sample emails #203",
+      "status": "ACTIVE",
+      "amount": 3045.0
+    },
+    "update_payload": {
+      "name": "Sample emails #203 UPDATED",
+      "status": "ACTIVE",
+      "amount": 6090.0
+    },
+    "patch_payload": {
+      "status": "INACTIVE"
+    },
+    "es_checks": {
+      "create": {
+        "status": "ACTIVE",
+        "amount": 3045.0
+      },
+      "update": {
+        "status": "ACTIVE",
+        "amount": 6090.0
+      },
+      "patch": {
+        "status": "INACTIVE"
+      },
+      "delete": {
+        "is_deleted": true
+      }
+    }
+  },
+  {
+    "base_path": "/api/v1/notifications/emails-204",
+    "es_index": "notifications_emails_204",
+    "create_payload": {
+      "id": "ema-204",
+      "name": "Sample emails #204",
+      "status": "ACTIVE",
+      "amount": 3060.0
+    },
+    "update_payload": {
+      "name": "Sample emails #204 UPDATED",
+      "status": "ACTIVE",
+      "amount": 6120.0
+    },
+    "patch_payload": {
+      "status": "INACTIVE"
+    },
+    "es_checks": {
+      "create": {
+        "status": "ACTIVE",
+        "amount": 3060.0
+      },
+      "update": {
+        "status": "ACTIVE",
+        "amount": 6120.0
+      },
+      "patch": {
+        "status": "INACTIVE"
+      },
+      "delete": {
+        "is_deleted": true
+      }
+    }
+  },
+  {
+    "base_path": "/api/v2/notifications/emails-205",
+    "es_index": "notifications_emails_205",
+    "create_payload": {
+      "id": "ema-205",
+      "name": "Sample emails #205",
+      "status": "ACTIVE",
+      "amount": 3075.0
+    },
+    "update_payload": {
+      "name": "Sample emails #205 UPDATED",
+      "status": "ACTIVE",
+      "amount": 6150.0
+    },
+    "patch_payload": {
+      "status": "INACTIVE"
+    },
+    "es_checks": {
+      "create": {
+        "status": "ACTIVE",
+        "amount": 3075.0
+      },
+      "update": {
+        "status": "ACTIVE",
+        "amount": 6150.0
+      },
+      "patch": {
+        "status": "INACTIVE"
+      },
+      "delete": {
+        "is_deleted": true
+      }
+    }
+  },
+  {
+    "base_path": "/api/v3/notifications/emails-206",
+    "es_index": "notifications_emails_206",
+    "create_payload": {
+      "id": "ema-206",
+      "name": "Sample emails #206",
+      "status": "ACTIVE",
+      "amount": 3090.0
+    },
+    "update_payload": {
+      "name": "Sample emails #206 UPDATED",
+      "status": "ACTIVE",
+      "amount": 6180.0
+    },
+    "patch_payload": {
+      "status": "INACTIVE"
+    },
+    "es_checks": {
+      "create": {
+        "status": "ACTIVE",
+        "amount": 3090.0
+      },
+      "update": {
+        "status": "ACTIVE",
+        "amount": 6180.0
+      },
+      "patch": {
+        "status": "INACTIVE"
+      },
+      "delete": {
+        "is_deleted": true
+      }
+    }
+  },
+  {
+    "base_path": "/api/v1/notifications/emails-207",
+    "es_index": "notifications_emails_207",
+    "create_payload": {
+      "id": "ema-207",
+      "name": "Sample emails #207",
+      "status": "ACTIVE",
+      "amount": 3105.0
+    },
+    "update_payload": {
+      "name": "Sample emails #207 UPDATED",
+      "status": "ACTIVE",
+      "amount": 6210.0
+    },
+    "patch_payload": {
+      "status": "INACTIVE"
+    },
+    "es_checks": {
+      "create": {
+        "status": "ACTIVE",
+        "amount": 3105.0
+      },
+      "update": {
+        "status": "ACTIVE",
+        "amount": 6210.0
+      },
+      "patch": {
+        "status": "INACTIVE"
+      },
+      "delete": {
+        "is_deleted": true
+      }
+    }
+  },
+  {
+    "base_path": "/api/v2/notifications/emails-208",
+    "es_index": "notifications_emails_208",
+    "create_payload": {
+      "id": "ema-208",
+      "name": "Sample emails #208",
+      "status": "ACTIVE",
+      "amount": 3120.0
+    },
+    "update_payload": {
+      "name": "Sample emails #208 UPDATED",
+      "status": "ACTIVE",
+      "amount": 6240.0
+    },
+    "patch_payload": {
+      "status": "INACTIVE"
+    },
+    "es_checks": {
+      "create": {
+        "status": "ACTIVE",
+        "amount": 3120.0
+      },
+      "update": {
+        "status": "ACTIVE",
+        "amount": 6240.0
+      },
+      "patch": {
+        "status": "INACTIVE"
+      },
+      "delete": {
+        "is_deleted": true
+      }
+    }
+  },
+  {
+    "base_path": "/api/v3/notifications/emails-209",
+    "es_index": "notifications_emails_209",
+    "create_payload": {
+      "id": "ema-209",
+      "name": "Sample emails #209",
+      "status": "ACTIVE",
+      "amount": 3135.0
+    },
+    "update_payload": {
+      "name": "Sample emails #209 UPDATED",
+      "status": "ACTIVE",
+      "amount": 6270.0
+    },
+    "patch_payload": {
+      "status": "INACTIVE"
+    },
+    "es_checks": {
+      "create": {
+        "status": "ACTIVE",
+        "amount": 3135.0
+      },
+      "update": {
+        "status": "ACTIVE",
+        "amount": 6270.0
+      },
+      "patch": {
+        "status": "INACTIVE"
+      },
+      "delete": {
+        "is_deleted": true
+      }
+    }
+  },
+  {
+    "base_path": "/api/v1/notifications/emails-210",
+    "es_index": "notifications_emails_210",
+    "create_payload": {
+      "id": "ema-210",
+      "name": "Sample emails #210",
+      "status": "ACTIVE",
+      "amount": 3150.0
+    },
+    "update_payload": {
+      "name": "Sample emails #210 UPDATED",
+      "status": "ACTIVE",
+      "amount": 6300.0
+    },
+    "patch_payload": {
+      "status": "INACTIVE"
+    },
+    "es_checks": {
+      "create": {
+        "status": "ACTIVE",
+        "amount": 3150.0
+      },
+      "update": {
+        "status": "ACTIVE",
+        "amount": 6300.0
+      },
+      "patch": {
+        "status": "INACTIVE"
+      },
+      "delete": {
+        "is_deleted": true
+      }
+    }
+  }
+]

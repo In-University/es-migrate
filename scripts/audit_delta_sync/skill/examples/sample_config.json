@@ -1,0 +1,51 @@
+[
+  {
+    "base_path": "/api/v1/billing/invoices",
+    "es_index": "billing_invoices",
+    "id_field": "invoice_id",
+    "steps": [
+      {
+        "name": "CREATE",
+        "method": "POST",
+        "path": "/api/v1/billing/invoices",
+        "payload": {
+          "invoice_id": "INV-2026-001",
+          "amount": 150.0,
+          "status": "ACTIVE"
+        },
+        "es_check": {
+          "status": "ACTIVE",
+          "amount": 150.0
+        }
+      },
+      {
+        "name": "UPDATE",
+        "method": "PUT",
+        "path": "/api/v1/billing/invoices/{id}",
+        "payload": {
+          "amount": 300.0,
+          "status": "ACTIVE"
+        },
+        "es_check": {
+          "amount": 300.0
+        }
+      },
+      {
+        "name": "PATCH",
+        "method": "PATCH",
+        "path": "/api/v1/billing/invoices/{id}",
+        "payload": {
+          "status": "INACTIVE"
+        },
+        "es_check": {
+          "status": "INACTIVE"
+        }
+      },
+      {
+        "name": "DELETE",
+        "method": "DELETE",
+        "path": "/api/v1/billing/invoices/{id}"
+      }
+    ]
+  }
+]

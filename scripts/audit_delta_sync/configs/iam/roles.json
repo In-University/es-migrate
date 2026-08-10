@@ -1,0 +1,342 @@
+[
+  {
+    "base_path": "/api/v1/iam/roles-51",
+    "es_index": "iam_roles_51",
+    "create_payload": {
+      "id": "rol-51",
+      "name": "Sample roles #51",
+      "status": "ACTIVE",
+      "amount": 765.0
+    },
+    "update_payload": {
+      "name": "Sample roles #51 UPDATED",
+      "status": "ACTIVE",
+      "amount": 1530.0
+    },
+    "patch_payload": {
+      "status": "INACTIVE"
+    },
+    "es_checks": {
+      "create": {
+        "status": "ACTIVE",
+        "amount": 765.0
+      },
+      "update": {
+        "status": "ACTIVE",
+        "amount": 1530.0
+      },
+      "patch": {
+        "status": "INACTIVE"
+      },
+      "delete": {
+        "is_deleted": true
+      }
+    }
+  },
+  {
+    "base_path": "/api/v2/iam/roles-52",
+    "es_index": "iam_roles_52",
+    "create_payload": {
+      "id": "rol-52",
+      "name": "Sample roles #52",
+      "status": "ACTIVE",
+      "amount": 780.0
+    },
+    "update_payload": {
+      "name": "Sample roles #52 UPDATED",
+      "status": "ACTIVE",
+      "amount": 1560.0
+    },
+    "patch_payload": {
+      "status": "INACTIVE"
+    },
+    "es_checks": {
+      "create": {
+        "status": "ACTIVE",
+        "amount": 780.0
+      },
+      "update": {
+        "status": "ACTIVE",
+        "amount": 1560.0
+      },
+      "patch": {
+        "status": "INACTIVE"
+      },
+      "delete": {
+        "is_deleted": true
+      }
+    }
+  },
+  {
+    "base_path": "/api/v3/iam/roles-53",
+    "es_index": "iam_roles_53",
+    "create_payload": {
+      "id": "rol-53",
+      "name": "Sample roles #53",
+      "status": "ACTIVE",
+      "amount": 795.0
+    },
+    "update_payload": {
+      "name": "Sample roles #53 UPDATED",
+      "status": "ACTIVE",
+      "amount": 1590.0
+    },
+    "patch_payload": {
+      "status": "INACTIVE"
+    },
+    "es_checks": {
+      "create": {
+        "status": "ACTIVE",
+        "amount": 795.0
+      },
+      "update": {
+        "status": "ACTIVE",
+        "amount": 1590.0
+      },
+      "patch": {
+        "status": "INACTIVE"
+      },
+      "delete": {
+        "is_deleted": true
+      }
+    }
+  },
+  {
+    "base_path": "/api/v1/iam/roles-54",
+    "es_index": "iam_roles_54",
+    "create_payload": {
+      "id": "rol-54",
+      "name": "Sample roles #54",
+      "status": "ACTIVE",
+      "amount": 810.0
+    },
+    "update_payload": {
+      "name": "Sample roles #54 UPDATED",
+      "status": "ACTIVE",
+      "amount": 1620.0
+    },
+    "patch_payload": {
+      "status": "INACTIVE"
+    },
+    "es_checks": {
+      "create": {
+        "status": "ACTIVE",
+        "amount": 810.0
+      },
+      "update": {
+        "status": "ACTIVE",
+        "amount": 1620.0
+      },
+      "patch": {
+        "status": "INACTIVE"
+      },
+      "delete": {
+        "is_deleted": true
+      }
+    }
+  },
+  {
+    "base_path": "/api/v2/iam/roles-55",
+    "es_index": "iam_roles_55",
+    "create_payload": {
+      "id": "rol-55",
+      "name": "Sample roles #55",
+      "status": "ACTIVE",
+      "amount": 825.0
+    },
+    "update_payload": {
+      "name": "Sample roles #55 UPDATED",
+      "status": "ACTIVE",
+      "amount": 1650.0
+    },
+    "patch_payload": {
+      "status": "INACTIVE"
+    },
+    "es_checks": {
+      "create": {
+        "status": "ACTIVE",
+        "amount": 825.0
+      },
+      "update": {
+        "status": "ACTIVE",
+        "amount": 1650.0
+      },
+      "patch": {
+        "status": "INACTIVE"
+      },
+      "delete": {
+        "is_deleted": true
+      }
+    }
+  },
+  {
+    "base_path": "/api/v3/iam/roles-56",
+    "es_index": "iam_roles_56",
+    "create_payload": {
+      "id": "rol-56",
+      "name": "Sample roles #56",
+      "status": "ACTIVE",
+      "amount": 840.0
+    },
+    "update_payload": {
+      "name": "Sample roles #56 UPDATED",
+      "status": "ACTIVE",
+      "amount": 1680.0
+    },
+    "patch_payload": {
+      "status": "INACTIVE"
+    },
+    "es_checks": {
+      "create": {
+        "status": "ACTIVE",
+        "amount": 840.0
+      },
+      "update": {
+        "status": "ACTIVE",
+        "amount": 1680.0
+      },
+      "patch": {
+        "status": "INACTIVE"
+      },
+      "delete": {
+        "is_deleted": true
+      }
+    }
+  },
+  {
+    "base_path": "/api/v1/iam/roles-57",
+    "es_index": "iam_roles_57",
+    "create_payload": {
+      "id": "rol-57",
+      "name": "Sample roles #57",
+      "status": "ACTIVE",
+      "amount": 855.0
+    },
+    "update_payload": {
+      "name": "Sample roles #57 UPDATED",
+      "status": "ACTIVE",
+      "amount": 1710.0
+    },
+    "patch_payload": {
+      "status": "INACTIVE"
+    },
+    "es_checks": {
+      "create": {
+        "status": "ACTIVE",
+        "amount": 855.0
+      },
+      "update": {
+        "status": "ACTIVE",
+        "amount": 1710.0
+      },
+      "patch": {
+        "status": "INACTIVE"
+      },
+      "delete": {
+        "is_deleted": true
+      }
+    }
+  },
+  {
+    "base_path": "/api/v2/iam/roles-58",
+    "es_index": "iam_roles_58",
+    "create_payload": {
+      "id": "rol-58",
+      "name": "Sample roles #58",
+      "status": "ACTIVE",
+      "amount": 870.0
+    },
+    "update_payload": {
+      "name": "Sample roles #58 UPDATED",
+      "status": "ACTIVE",
+      "amount": 1740.0
+    },
+    "patch_payload": {
+      "status": "INACTIVE"
+    },
+    "es_checks": {
+      "create": {
+        "status": "ACTIVE",
+        "amount": 870.0
+      },
+      "update": {
+        "status": "ACTIVE",
+        "amount": 1740.0
+      },
+      "patch": {
+        "status": "INACTIVE"
+      },
+      "delete": {
+        "is_deleted": true
+      }
+    }
+  },
+  {
+    "base_path": "/api/v3/iam/roles-59",
+    "es_index": "iam_roles_59",
+    "create_payload": {
+      "id": "rol-59",
+      "name": "Sample roles #59",
+      "status": "ACTIVE",
+      "amount": 885.0
+    },
+    "update_payload": {
+      "name": "Sample roles #59 UPDATED",
+      "status": "ACTIVE",
+      "amount": 1770.0
+    },
+    "patch_payload": {
+      "status": "INACTIVE"
+    },
+    "es_checks": {
+      "create": {
+        "status": "ACTIVE",
+        "amount": 885.0
+      },
+      "update": {
+        "status": "ACTIVE",
+        "amount": 1770.0
+      },
+      "patch": {
+        "status": "INACTIVE"
+      },
+      "delete": {
+        "is_deleted": true
+      }
+    }
+  },
+  {
+    "base_path": "/api/v1/iam/roles-60",
+    "es_index": "iam_roles_60",
+    "create_payload": {
+      "id": "rol-60",
+      "name": "Sample roles #60",
+      "status": "ACTIVE",
+      "amount": 900.0
+    },
+    "update_payload": {
+      "name": "Sample roles #60 UPDATED",
+      "status": "ACTIVE",
+      "amount": 1800.0
+    },
+    "patch_payload": {
+      "status": "INACTIVE"
+    },
+    "es_checks": {
+      "create": {
+        "status": "ACTIVE",
+        "amount": 900.0
+      },
+      "update": {
+        "status": "ACTIVE",
+        "amount": 1800.0
+      },
+      "patch": {
+        "status": "INACTIVE"
+      },
+      "delete": {
+        "is_deleted": true
+      }
+    }
+  }
+]

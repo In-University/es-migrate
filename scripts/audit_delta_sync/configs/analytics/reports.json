@@ -1,0 +1,342 @@
+[
+  {
+    "base_path": "/api/v1/analytics/reports-261",
+    "es_index": "analytics_reports_261",
+    "create_payload": {
+      "id": "rep-261",
+      "name": "Sample reports #261",
+      "status": "ACTIVE",
+      "amount": 3915.0
+    },
+    "update_payload": {
+      "name": "Sample reports #261 UPDATED",
+      "status": "ACTIVE",
+      "amount": 7830.0
+    },
+    "patch_payload": {
+      "status": "INACTIVE"
+    },
+    "es_checks": {
+      "create": {
+        "status": "ACTIVE",
+        "amount": 3915.0
+      },
+      "update": {
+        "status": "ACTIVE",
+        "amount": 7830.0
+      },
+      "patch": {
+        "status": "INACTIVE"
+      },
+      "delete": {
+        "is_deleted": true
+      }
+    }
+  },
+  {
+    "base_path": "/api/v2/analytics/reports-262",
+    "es_index": "analytics_reports_262",
+    "create_payload": {
+      "id": "rep-262",
+      "name": "Sample reports #262",
+      "status": "ACTIVE",
+      "amount": 3930.0
+    },
+    "update_payload": {
+      "name": "Sample reports #262 UPDATED",
+      "status": "ACTIVE",
+      "amount": 7860.0
+    },
+    "patch_payload": {
+      "status": "INACTIVE"
+    },
+    "es_checks": {
+      "create": {
+        "status": "ACTIVE",
+        "amount": 3930.0
+      },
+      "update": {
+        "status": "ACTIVE",
+        "amount": 7860.0
+      },
+      "patch": {
+        "status": "INACTIVE"
+      },
+      "delete": {
+        "is_deleted": true
+      }
+    }
+  },
+  {
+    "base_path": "/api/v3/analytics/reports-263",
+    "es_index": "analytics_reports_263",
+    "create_payload": {
+      "id": "rep-263",
+      "name": "Sample reports #263",
+      "status": "ACTIVE",
+      "amount": 3945.0
+    },
+    "update_payload": {
+      "name": "Sample reports #263 UPDATED",
+      "status": "ACTIVE",
+      "amount": 7890.0
+    },
+    "patch_payload": {
+      "status": "INACTIVE"
+    },
+    "es_checks": {
+      "create": {
+        "status": "ACTIVE",
+        "amount": 3945.0
+      },
+      "update": {
+        "status": "ACTIVE",
+        "amount": 7890.0
+      },
+      "patch": {
+        "status": "INACTIVE"
+      },
+      "delete": {
+        "is_deleted": true
+      }
+    }
+  },
+  {
+    "base_path": "/api/v1/analytics/reports-264",
+    "es_index": "analytics_reports_264",
+    "create_payload": {
+      "id": "rep-264",
+      "name": "Sample reports #264",
+      "status": "ACTIVE",
+      "amount": 3960.0
+    },
+    "update_payload": {
+      "name": "Sample reports #264 UPDATED",
+      "status": "ACTIVE",
+      "amount": 7920.0
+    },
+    "patch_payload": {
+      "status": "INACTIVE"
+    },
+    "es_checks": {
+      "create": {
+        "status": "ACTIVE",
+        "amount": 3960.0
+      },
+      "update": {
+        "status": "ACTIVE",
+        "amount": 7920.0
+      },
+      "patch": {
+        "status": "INACTIVE"
+      },
+      "delete": {
+        "is_deleted": true
+      }
+    }
+  },
+  {
+    "base_path": "/api/v2/analytics/reports-265",
+    "es_index": "analytics_reports_265",
+    "create_payload": {
+      "id": "rep-265",
+      "name": "Sample reports #265",
+      "status": "ACTIVE",
+      "amount": 3975.0
+    },
+    "update_payload": {
+      "name": "Sample reports #265 UPDATED",
+      "status": "ACTIVE",
+      "amount": 7950.0
+    },
+    "patch_payload": {
+      "status": "INACTIVE"
+    },
+    "es_checks": {
+      "create": {
+        "status": "ACTIVE",
+        "amount": 3975.0
+      },
+      "update": {
+        "status": "ACTIVE",
+        "amount": 7950.0
+      },
+      "patch": {
+        "status": "INACTIVE"
+      },
+      "delete": {
+        "is_deleted": true
+      }
+    }
+  },
+  {
+    "base_path": "/api/v3/analytics/reports-266",
+    "es_index": "analytics_reports_266",
+    "create_payload": {
+      "id": "rep-266",
+      "name": "Sample reports #266",
+      "status": "ACTIVE",
+      "amount": 3990.0
+    },
+    "update_payload": {
+      "name": "Sample reports #266 UPDATED",
+      "status": "ACTIVE",
+      "amount": 7980.0
+    },
+    "patch_payload": {
+      "status": "INACTIVE"
+    },
+    "es_checks": {
+      "create": {
+        "status": "ACTIVE",
+        "amount": 3990.0
+      },
+      "update": {
+        "status": "ACTIVE",
+        "amount": 7980.0
+      },
+      "patch": {
+        "status": "INACTIVE"
+      },
+      "delete": {
+        "is_deleted": true
+      }
+    }
+  },
+  {
+    "base_path": "/api/v1/analytics/reports-267",
+    "es_index": "analytics_reports_267",
+    "create_payload": {
+      "id": "rep-267",
+      "name": "Sample reports #267",
+      "status": "ACTIVE",
+      "amount": 4005.0
+    },
+    "update_payload": {
+      "name": "Sample reports #267 UPDATED",
+      "status": "ACTIVE",
+      "amount": 8010.0
+    },
+    "patch_payload": {
+      "status": "INACTIVE"
+    },
+    "es_checks": {
+      "create": {
+        "status": "ACTIVE",
+        "amount": 4005.0
+      },
+      "update": {
+        "status": "ACTIVE",
+        "amount": 8010.0
+      },
+      "patch": {
+        "status": "INACTIVE"
+      },
+      "delete": {
+        "is_deleted": true
+      }
+    }
+  },
+  {
+    "base_path": "/api/v2/analytics/reports-268",
+    "es_index": "analytics_reports_268",
+    "create_payload": {
+      "id": "rep-268",
+      "name": "Sample reports #268",
+      "status": "ACTIVE",
+      "amount": 4020.0
+    },
+    "update_payload": {
+      "name": "Sample reports #268 UPDATED",
+      "status": "ACTIVE",
+      "amount": 8040.0
+    },
+    "patch_payload": {
+      "status": "INACTIVE"
+    },
+    "es_checks": {
+      "create": {
+        "status": "ACTIVE",
+        "amount": 4020.0
+      },
+      "update": {
+        "status": "ACTIVE",
+        "amount": 8040.0
+      },
+      "patch": {
+        "status": "INACTIVE"
+      },
+      "delete": {
+        "is_deleted": true
+      }
+    }
+  },
+  {
+    "base_path": "/api/v3/analytics/reports-269",
+    "es_index": "analytics_reports_269",
+    "create_payload": {
+      "id": "rep-269",
+      "name": "Sample reports #269",
+      "status": "ACTIVE",
+      "amount": 4035.0
+    },
+    "update_payload": {
+      "name": "Sample reports #269 UPDATED",
+      "status": "ACTIVE",
+      "amount": 8070.0
+    },
+    "patch_payload": {
+      "status": "INACTIVE"
+    },
+    "es_checks": {
+      "create": {
+        "status": "ACTIVE",
+        "amount": 4035.0
+      },
+      "update": {
+        "status": "ACTIVE",
+        "amount": 8070.0
+      },
+      "patch": {
+        "status": "INACTIVE"
+      },
+      "delete": {
+        "is_deleted": true
+      }
+    }
+  },
+  {
+    "base_path": "/api/v1/analytics/reports-270",
+    "es_index": "analytics_reports_270",
+    "create_payload": {
+      "id": "rep-270",
+      "name": "Sample reports #270",
+      "status": "ACTIVE",
+      "amount": 4050.0
+    },
+    "update_payload": {
+      "name": "Sample reports #270 UPDATED",
+      "status": "ACTIVE",
+      "amount": 8100.0
+    },
+    "patch_payload": {
+      "status": "INACTIVE"
+    },
+    "es_checks": {
+      "create": {
+        "status": "ACTIVE",
+        "amount": 4050.0
+      },
+      "update": {
+        "status": "ACTIVE",
+        "amount": 8100.0
+      },
+      "patch": {
+        "status": "INACTIVE"
+      },
+      "delete": {
+        "is_deleted": true
+      }
+    }
+  }
+]

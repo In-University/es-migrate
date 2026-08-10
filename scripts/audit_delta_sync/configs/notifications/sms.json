@@ -1,0 +1,342 @@
+[
+  {
+    "base_path": "/api/v2/notifications/sms-211",
+    "es_index": "notifications_sms_211",
+    "create_payload": {
+      "id": "sms-211",
+      "name": "Sample sms #211",
+      "status": "ACTIVE",
+      "amount": 3165.0
+    },
+    "update_payload": {
+      "name": "Sample sms #211 UPDATED",
+      "status": "ACTIVE",
+      "amount": 6330.0
+    },
+    "patch_payload": {
+      "status": "INACTIVE"
+    },
+    "es_checks": {
+      "create": {
+        "status": "ACTIVE",
+        "amount": 3165.0
+      },
+      "update": {
+        "status": "ACTIVE",
+        "amount": 6330.0
+      },
+      "patch": {
+        "status": "INACTIVE"
+      },
+      "delete": {
+        "is_deleted": true
+      }
+    }
+  },
+  {
+    "base_path": "/api/v3/notifications/sms-212",
+    "es_index": "notifications_sms_212",
+    "create_payload": {
+      "id": "sms-212",
+      "name": "Sample sms #212",
+      "status": "ACTIVE",
+      "amount": 3180.0
+    },
+    "update_payload": {
+      "name": "Sample sms #212 UPDATED",
+      "status": "ACTIVE",
+      "amount": 6360.0
+    },
+    "patch_payload": {
+      "status": "INACTIVE"
+    },
+    "es_checks": {
+      "create": {
+        "status": "ACTIVE",
+        "amount": 3180.0
+      },
+      "update": {
+        "status": "ACTIVE",
+        "amount": 6360.0
+      },
+      "patch": {
+        "status": "INACTIVE"
+      },
+      "delete": {
+        "is_deleted": true
+      }
+    }
+  },
+  {
+    "base_path": "/api/v1/notifications/sms-213",
+    "es_index": "notifications_sms_213",
+    "create_payload": {
+      "id": "sms-213",
+      "name": "Sample sms #213",
+      "status": "ACTIVE",
+      "amount": 3195.0
+    },
+    "update_payload": {
+      "name": "Sample sms #213 UPDATED",
+      "status": "ACTIVE",
+      "amount": 6390.0
+    },
+    "patch_payload": {
+      "status": "INACTIVE"
+    },
+    "es_checks": {
+      "create": {
+        "status": "ACTIVE",
+        "amount": 3195.0
+      },
+      "update": {
+        "status": "ACTIVE",
+        "amount": 6390.0
+      },
+      "patch": {
+        "status": "INACTIVE"
+      },
+      "delete": {
+        "is_deleted": true
+      }
+    }
+  },
+  {
+    "base_path": "/api/v2/notifications/sms-214",
+    "es_index": "notifications_sms_214",
+    "create_payload": {
+      "id": "sms-214",
+      "name": "Sample sms #214",
+      "status": "ACTIVE",
+      "amount": 3210.0
+    },
+    "update_payload": {
+      "name": "Sample sms #214 UPDATED",
+      "status": "ACTIVE",
+      "amount": 6420.0
+    },
+    "patch_payload": {
+      "status": "INACTIVE"
+    },
+    "es_checks": {
+      "create": {
+        "status": "ACTIVE",
+        "amount": 3210.0
+      },
+      "update": {
+        "status": "ACTIVE",
+        "amount": 6420.0
+      },
+      "patch": {
+        "status": "INACTIVE"
+      },
+      "delete": {
+        "is_deleted": true
+      }
+    }
+  },
+  {
+    "base_path": "/api/v3/notifications/sms-215",
+    "es_index": "notifications_sms_215",
+    "create_payload": {
+      "id": "sms-215",
+      "name": "Sample sms #215",
+      "status": "ACTIVE",
+      "amount": 3225.0
+    },
+    "update_payload": {
+      "name": "Sample sms #215 UPDATED",
+      "status": "ACTIVE",
+      "amount": 6450.0
+    },
+    "patch_payload": {
+      "status": "INACTIVE"
+    },
+    "es_checks": {
+      "create": {
+        "status": "ACTIVE",
+        "amount": 3225.0
+      },
+      "update": {
+        "status": "ACTIVE",
+        "amount": 6450.0
+      },
+      "patch": {
+        "status": "INACTIVE"
+      },
+      "delete": {
+        "is_deleted": true
+      }
+    }
+  },
+  {
+    "base_path": "/api/v1/notifications/sms-216",
+    "es_index": "notifications_sms_216",
+    "create_payload": {
+      "id": "sms-216",
+      "name": "Sample sms #216",
+      "status": "ACTIVE",
+      "amount": 3240.0
+    },
+    "update_payload": {
+      "name": "Sample sms #216 UPDATED",
+      "status": "ACTIVE",
+      "amount": 6480.0
+    },
+    "patch_payload": {
+      "status": "INACTIVE"
+    },
+    "es_checks": {
+      "create": {
+        "status": "ACTIVE",
+        "amount": 3240.0
+      },
+      "update": {
+        "status": "ACTIVE",
+        "amount": 6480.0
+      },
+      "patch": {
+        "status": "INACTIVE"
+      },
+      "delete": {
+        "is_deleted": true
+      }
+    }
+  },
+  {
+    "base_path": "/api/v2/notifications/sms-217",
+    "es_index": "notifications_sms_217",
+    "create_payload": {
+      "id": "sms-217",
+      "name": "Sample sms #217",
+      "status": "ACTIVE",
+      "amount": 3255.0
+    },
+    "update_payload": {
+      "name": "Sample sms #217 UPDATED",
+      "status": "ACTIVE",
+      "amount": 6510.0
+    },
+    "patch_payload": {
+      "status": "INACTIVE"
+    },
+    "es_checks": {
+      "create": {
+        "status": "ACTIVE",
+        "amount": 3255.0
+      },
+      "update": {
+        "status": "ACTIVE",
+        "amount": 6510.0
+      },
+      "patch": {
+        "status": "INACTIVE"
+      },
+      "delete": {
+        "is_deleted": true
+      }
+    }
+  },
+  {
+    "base_path": "/api/v3/notifications/sms-218",
+    "es_index": "notifications_sms_218",
+    "create_payload": {
+      "id": "sms-218",
+      "name": "Sample sms #218",
+      "status": "ACTIVE",
+      "amount": 3270.0
+    },
+    "update_payload": {
+      "name": "Sample sms #218 UPDATED",
+      "status": "ACTIVE",
+      "amount": 6540.0
+    },
+    "patch_payload": {
+      "status": "INACTIVE"
+    },
+    "es_checks": {
+      "create": {
+        "status": "ACTIVE",
+        "amount": 3270.0
+      },
+      "update": {
+        "status": "ACTIVE",
+        "amount": 6540.0
+      },
+      "patch": {
+        "status": "INACTIVE"
+      },
+      "delete": {
+        "is_deleted": true
+      }
+    }
+  },
+  {
+    "base_path": "/api/v1/notifications/sms-219",
+    "es_index": "notifications_sms_219",
+    "create_payload": {
+      "id": "sms-219",
+      "name": "Sample sms #219",
+      "status": "ACTIVE",
+      "amount": 3285.0
+    },
+    "update_payload": {
+      "name": "Sample sms #219 UPDATED",
+      "status": "ACTIVE",
+      "amount": 6570.0
+    },
+    "patch_payload": {
+      "status": "INACTIVE"
+    },
+    "es_checks": {
+      "create": {
+        "status": "ACTIVE",
+        "amount": 3285.0
+      },
+      "update": {
+        "status": "ACTIVE",
+        "amount": 6570.0
+      },
+      "patch": {
+        "status": "INACTIVE"
+      },
+      "delete": {
+        "is_deleted": true
+      }
+    }
+  },
+  {
+    "base_path": "/api/v2/notifications/sms-220",
+    "es_index": "notifications_sms_220",
+    "create_payload": {
+      "id": "sms-220",
+      "name": "Sample sms #220",
+      "status": "ACTIVE",
+      "amount": 3300.0
+    },
+    "update_payload": {
+      "name": "Sample sms #220 UPDATED",
+      "status": "ACTIVE",
+      "amount": 6600.0
+    },
+    "patch_payload": {
+      "status": "INACTIVE"
+    },
+    "es_checks": {
+      "create": {
+        "status": "ACTIVE",
+        "amount": 3300.0
+      },
+      "update": {
+        "status": "ACTIVE",
+        "amount": 6600.0
+      },
+      "patch": {
+        "status": "INACTIVE"
+      },
+      "delete": {
+        "is_deleted": true
+      }
+    }
+  }
+]
