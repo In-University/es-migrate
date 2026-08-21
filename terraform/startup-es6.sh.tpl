@@ -46,3 +46,60 @@ docker run -d --name es6 --restart=always \
   --ulimit memlock=-1:-1 \
   --ulimit nofile=65535:65535 \
   ${es6_image}
+
+# --- wait for ES6 to start up and seed sample roles & users for Security Lab ---
+echo "Waiting for ES6 cluster health..."
+until curl -s -u "elastic:${elastic_password}" "http://localhost:9200/_cluster/health" >/dev/null; do
+  sleep 3
+done
+
+# Seed sample roles on ES6
+curl -s -u "elastic:${elastic_password}" -XPOST "http://localhost:9200/_security/role/bench_reader_role" \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "cluster": ["monitor"],
+    "indices": [{"names": ["bench-*", "bench-es6*"], "privileges": ["read", "view_index_metadata"]}]
+  }'
+
+curl -s -u "elastic:${elastic_password}" -XPOST "http://localhost:9200/_security/role/bench_writer_role" \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "cluster": ["monitor"],
+    "indices": [{"names": ["bench-*", "bench-es6*", "bench-es9*"], "privileges": ["read", "write", "create_doc", "index", "delete", "create_index", "auto_configure", "view_index_metadata"]}]
+  }'
+
+curl -s -u "elastic:${elastic_password}" -XPOST "http://localhost:9200/_security/role/bench_admin_role" \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "cluster": ["monitor", "manage_index_templates"],
+    "indices": [{"names": ["bench-*", "bench-es6*"], "privileges": ["all"]}]
+  }'
+
+# Seed sample users on ES6 (ES9 remains clean for migration lab)
+curl -s -u "elastic:${elastic_password}" -XPOST "http://localhost:9200/_security/user/bench_reader" \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "password": "ReaderPass123!",
+    "roles": ["bench_reader_role"],
+    "full_name": "Bench Reader User",
+    "email": "reader@example.com"
+  }'
+
+curl -s -u "elastic:${elastic_password}" -XPOST "http://localhost:9200/_security/user/bench_writer" \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "password": "WriterPass123!",
+    "roles": ["bench_writer_role"],
+    "full_name": "Bench Writer User",
+    "email": "writer@example.com"
+  }'
+
+curl -s -u "elastic:${elastic_password}" -XPOST "http://localhost:9200/_security/user/bench_admin" \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "password": "AdminPass123!",
+    "roles": ["bench_admin_role"],
+    "full_name": "Bench Admin User",
+    "email": "admin@example.com"
+  }'
+

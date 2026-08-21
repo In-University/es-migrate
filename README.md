@@ -67,6 +67,21 @@ terraform output -raw check_es6 | bash   # -> authenticates as elastic on 6.8.23
 terraform output -raw check_es9 | bash   # -> authenticates as elastic on 9.x
 ```
 
+## 1.1 Security & RBAC Migration (ES6 -> ES9)
+
+Automated migration utility to export custom roles, native users, and bcrypt `password_hash` definitions directly from ES6 `.security` index into ES9.
+
+### Quick Start
+```bash
+# 1. Run migration and RBAC verification:
+python3 scripts/migrate-system-indexes/hashpassword/migrate_security_es6_to_es9.py
+
+# 2. Reset ES9 to clean state for re-testing:
+python3 scripts/migrate-system-indexes/hashpassword/migrate_security_es6_to_es9.py --clean
+```
+
+For full lab documentation, step-by-step hands-on guide, manual cURL commands, and RBAC verification rules, see **[scripts/migrate-system-indexes/ES-SECURITY-MIGRATION-LAB.md](scripts/migrate-system-indexes/ES-SECURITY-MIGRATION-LAB.md)**.
+
 ## 2. Generate 8M docs on ES6
 Copy the scripts up and run the generator **on the es6 VM** (localhost = fastest):
 ```bash
@@ -197,6 +212,7 @@ terraform/
   rollback/   ephemeral single-node GKE cluster + firewall for the rollback sync
   main.tf, variables.tf, outputs.tf, startup-*.sh.tpl   2 VMs, firewall, Docker startup scripts
 scripts/
+  migrate_security_es6_to_es9.py  Security migration lab script: exports ES6 roles/users -> ES9
   generate_es6.py, reindex_remote.sh, mapping-es6.json, mapping-es9.json
   es_rollback.sh            ES9 -> ES6 rollback controller: delta sync, gate,
                             delete reconciliation, verify, resume, undo (§5)
@@ -207,6 +223,7 @@ scripts/
   reconcile_deletes.sh      ES9 -> ES6 delete reconciliation, ID-diff based (§5)
   simulate_es9_mutations.py test-only: create/update/delete activity on ES9 (§5)
 docs/
+  ES-SECURITY-MIGRATION-LAB.md Guide & step-by-step for ES6 -> ES9 Security RBAC Migration Lab
   ES-ROLLBACK.md           guide for scripts/es_rollback.sh
   MAPPING-DIFFERENCES.md   ES6 vs ES9 mapping differences
   superpowers/specs/       design docs for the network split and rollback scenario
