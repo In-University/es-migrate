@@ -38,3 +38,15 @@ output "check_es9" {
   value     = "curl -u elastic:${var.elastic_password} http://${google_compute_instance.es9.network_interface[0].access_config[0].nat_ip}:9200/_security/_authenticate"
   sensitive = true
 }
+
+output "jenkins_internal_ip" {
+  value = module.jenkins.jenkins_internal_ip
+}
+
+output "jenkins_external_ip" {
+  value = module.jenkins.jenkins_external_ip
+}
+
+output "jenkins_url_external" {
+  value = module.jenkins.jenkins_url_external
+}

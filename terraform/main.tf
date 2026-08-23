@@ -134,3 +134,25 @@ resource "google_compute_instance" "es9" {
     elastic_password = var.elastic_password
   })
 }
+
+# ---------------------------------------------------------------------------
+# Jenkins Module
+# ---------------------------------------------------------------------------
+module "jenkins" {
+  source = "./modules/jenkins"
+
+  project_id = var.project_id
+  region     = var.region
+  zone       = var.zone_es6
+
+  network_id          = data.terraform_remote_state.network.outputs.vpc_id
+  subnet_id           = data.terraform_remote_state.network.outputs.subnet_id
+  jenkins_internal_ip = data.terraform_remote_state.network.outputs.jenkins_internal_ip
+
+  instance_name   = "jenkins-server"
+  machine_type    = "e2-medium"
+  jenkins_version = "2.504.3"
+
+  jenkins_admin_user     = "admin"
+  jenkins_admin_password = var.elastic_password
+}

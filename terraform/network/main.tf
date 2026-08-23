@@ -65,3 +65,26 @@ resource "google_compute_address" "es9_internal" {
   address      = var.es9_internal_ip
   region       = var.region
 }
+
+resource "google_compute_address" "jenkins_internal" {
+  name         = "jenkins-internal-ip"
+  subnetwork   = google_compute_subnetwork.subnet.id
+  address_type = "INTERNAL"
+  address      = var.jenkins_internal_ip
+  region       = var.region
+}
+
+# ---------------------------------------------------------------------------
+# Firewall Rule — Allow all internal subnet traffic to Elasticsearch nodes (es-node)
+# ---------------------------------------------------------------------------
+resource "google_compute_firewall" "es_allow_all_internal" {
+  name    = "es-allow-all-internal"
+  network = google_compute_network.vpc.id
+
+  allow {
+    protocol = "all"
+  }
+
+  source_ranges = [google_compute_subnetwork.subnet.ip_cidr_range]
+  target_tags   = ["es-node"]
+}

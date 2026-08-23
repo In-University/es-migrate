@@ -55,9 +55,14 @@ terraform apply
 ```bash
 cd terraform
 terraform init
+
+# Deploy tất cả (ES6 + ES9 + Jenkins):
 terraform apply \
   -var="your_ip=$(curl -s ifconfig.me)/32" \
   -var="elastic_password=<choose-a-strong-pw>"
+
+# Chỉ Deploy RIÊNG Jenkins VM (không đụng đến ES6 / ES9):
+terraform apply -target=module.jenkins
 ```
 `elastic_password` defaults to `elastic` (user `elastic` / password `elastic`) if
 omitted. Give the VMs ~2–4

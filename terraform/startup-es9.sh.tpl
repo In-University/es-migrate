@@ -5,10 +5,13 @@ set -euxo pipefail
 sysctl -w vm.max_map_count=262144
 echo "vm.max_map_count=262144" > /etc/sysctl.d/99-elasticsearch.conf
 
-# --- install Docker ---
+# --- install Docker & Node.js 20 LTS ---
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -y
 apt-get install -y ca-certificates curl gnupg
+curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
+apt-get install -y nodejs
+npm install -g elasticdump || true
 
 # --- install Google Cloud Ops Agent ---
 curl -sSO https://dl.google.com/cloudagents/add-google-cloud-ops-agent-repo.sh

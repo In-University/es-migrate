@@ -28,6 +28,12 @@ variable "es9_internal_ip" {
   default     = "10.146.0.11"
 }
 
+variable "jenkins_internal_ip" {
+  description = "Reserved internal IP for the Jenkins VM"
+  type        = string
+  default     = "10.146.0.12"
+}
+
 variable "gke_pods_cidr" {
   description = "Secondary range for the rollback GKE cluster's pod IPs"
   type        = string

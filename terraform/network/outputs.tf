@@ -30,6 +30,10 @@ output "es9_internal_ip" {
   value = google_compute_address.es9_internal.address
 }
 
+output "jenkins_internal_ip" {
+  value = google_compute_address.jenkins_internal.address
+}
+
 output "gke_pods_range_name" {
   value = "gke-pods"
 }
