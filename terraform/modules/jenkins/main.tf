@@ -49,11 +49,11 @@ resource "google_compute_instance" "jenkins" {
     access_config {}
   }
 
-  metadata_startup_script = templatefile("${path.module}/templates/startup.sh.tpl", {
+  metadata_startup_script = replace(templatefile("${path.module}/templates/startup.sh.tpl", {
     jenkins_version = var.jenkins_version
     init_groovy_script = templatefile("${path.module}/templates/init_jenkins.groovy.tpl", {
       jenkins_admin_user     = var.jenkins_admin_user
       jenkins_admin_password = var.jenkins_admin_password
     })
-  })
+  }), "\r\n", "\n")
 }

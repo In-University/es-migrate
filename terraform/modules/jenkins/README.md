@@ -94,3 +94,28 @@ To configure permissions allowing a non-admin user to manage jobs (Build / Creat
    - **Overall**: Check `Read` (do **NOT** check `Administer`).
    - **Job**: Check `Create`, `Configure`, `Delete`, `Build`, `Read`, `Cancel`, and `Workspace`.
 4. Click **Save**.
+
+---
+
+## ⚡ 5. Automated Parameter Updates via Containerized Jenkins CLI Pipeline
+
+Instead of using `curl` externally, Jenkins can run a self-updating Pipeline job (`update-job-parameters`) directly inside the Jenkins Docker container.
+
+### How it works:
+1. **Java Runtime**: Jenkins runs inside Docker with Java preinstalled.
+2. **CLI Download**: The job downloads `jenkins-cli.jar` directly from `http://localhost:8080/jnlpJars/jenkins-cli.jar`.
+3. **Authentication**: Uses Jenkins Credentials (`Username with password`) stored under Credentials ID `my-jenkins-token` (Username: `<admin_user>`, Password: `<api_token>`).
+4. **Execution Flow**:
+   - `get-job`: Fetches current job configuration XML (`sample-pipeline-job`).
+   - `sed`: Updates default parameter value (`TARGET_INDEX`) directly in `config.xml`.
+   - `update-job`: Applies the updated XML configuration back to Jenkins via `jenkins-cli.jar`.
+
+### Steps to Run:
+1. Go to **Manage Jenkins** -> **Credentials** -> **System** -> **Global credentials**.
+2. Add Credentials:
+   - **Kind**: Username with password
+   - **Username**: `admin` (or your Jenkins user)
+   - **Password**: `<YOUR_API_TOKEN>`
+   - **ID**: `my-jenkins-token`
+3. Trigger **`update-job-parameters`** with desired parameters (`TARGET_JOB`, `NEW_TARGET_INDEX`, `NEW_ACTION`, `NEW_DRY_RUN`).
+

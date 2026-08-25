@@ -1,0 +1,103 @@
+// Pipeline Job to programmatically update parameter default values of target Jenkins jobs (e.g. simple-pipeline)
+// Runs inside Jenkins Master container using Java runtime & jenkins-cli.jar
+
+pipeline {
+    agent any
+
+    parameters {
+        string(
+            name: 'TARGET_JOB',
+            defaultValue: 'sample-pipeline-job',
+            description: 'Name of the Jenkins Pipeline/Freestyle job to update'
+        )
+        string(
+            name: 'NEW_TARGET_INDEX',
+            defaultValue: 'bench-es9-updated',
+            description: 'New default value for TARGET_INDEX parameter'
+        )
+        string(
+            name: 'CREDENTIALS_ID',
+            defaultValue: 'my-jenkins-token',
+            description: 'Jenkins Credentials ID containing User and API Token'
+        )
+    }
+
+    environment {
+        JENKINS_URL = 'http://localhost:8080'
+        TARGET_JOB = "${params.TARGET_JOB}"
+        NEW_TARGET_INDEX = "${params.NEW_TARGET_INDEX}"
+        CREDENTIALS_ID = "${params.CREDENTIALS_ID}"
+    }
+
+    stages {
+        stage('Download Jenkins CLI') {
+            steps {
+                sh '''
+                    set -eu
+                    echo "[CLI] Downloading jenkins-cli.jar from ${JENKINS_URL}..."
+                    curl -sSL ${JENKINS_URL}/jnlpJars/jenkins-cli.jar -o jenkins-cli.jar
+                '''
+            }
+        }
+
+        stage('Fetch Job Config') {
+            steps {
+                withCredentials([usernamePassword(credentialsId: "${env.CREDENTIALS_ID}", passwordVariable: 'API_TOKEN', usernameVariable: 'USER')]) {
+                    sh '''
+                        set -eu
+                        echo "[CLI] Fetching configuration for job: ${TARGET_JOB}..."
+                        java -jar jenkins-cli.jar -s ${JENKINS_URL} -auth "$USER:$API_TOKEN" get-job "${TARGET_JOB}" > config.xml
+                        
+                        echo "[CLI] Current Job Parameters Configuration:"
+                        grep -A 4 "<name>TARGET_INDEX</name>" config.xml || true
+                    '''
+                }
+            }
+        }
+
+        stage('Update Config XML') {
+            steps {
+                sh '''
+                    set -eu
+                    echo "[CLI] Checking if TARGET_INDEX parameter exists in config.xml..."
+                    if ! grep -q "<name>TARGET_INDEX</name>" config.xml; then
+                        echo "[WARNING] Parameter TARGET_INDEX not found in ${TARGET_JOB}."
+                    else
+                        echo "[CLI] Updating TARGET_INDEX default value to ${NEW_TARGET_INDEX} in config.xml..."
+                        SAFE_INDEX=$(echo "${NEW_TARGET_INDEX}" | tr -d '#&')
+                        sed -i '/<name>TARGET_INDEX/,/defaultValue/ s#<defaultValue>.*</defaultValue>#<defaultValue>'"${SAFE_INDEX}"'</defaultValue>#' config.xml
+                    fi
+
+                    echo "[CLI] Updated config XML preview:"
+                    grep -A 4 "<name>TARGET_INDEX</name>" config.xml || true
+                '''
+            }
+        }
+
+        stage('Apply Job Update') {
+            steps {
+                withCredentials([usernamePassword(credentialsId: "${env.CREDENTIALS_ID}", passwordVariable: 'API_TOKEN', usernameVariable: 'USER')]) {
+                    sh '''
+                        set -eu
+                        echo "[CLI] Applying updated configuration to job: ${TARGET_JOB}..."
+                        java -jar jenkins-cli.jar -s ${JENKINS_URL} -auth "$USER:$API_TOKEN" update-job "${TARGET_JOB}" < config.xml
+                        echo "[CLI] Job configuration updated successfully!"
+                    '''
+                }
+            }
+        }
+
+        stage('Verify Update') {
+            steps {
+                withCredentials([usernamePassword(credentialsId: "${env.CREDENTIALS_ID}", passwordVariable: 'API_TOKEN', usernameVariable: 'USER')]) {
+                    sh '''
+                        set -eu
+                        echo "[CLI] Verifying updated job parameters via get-job..."
+                        java -jar jenkins-cli.jar -s ${JENKINS_URL} -auth "$USER:$API_TOKEN" get-job "${TARGET_JOB}" > verified_config.xml
+                        grep -A 4 "<name>TARGET_INDEX</name>" verified_config.xml || true
+                    '''
+                }
+            }
+        }
+    }
+}

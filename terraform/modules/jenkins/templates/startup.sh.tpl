@@ -27,7 +27,7 @@ docker run --rm \
   -u root \
   -v "$${JENKINS_HOST_DIR}:/var/jenkins_home" \
   jenkins/jenkins:${jenkins_version} \
-  jenkins-plugin-cli --plugins workflow-aggregator git job-dsl configuration-as-code pipeline-stage-view matrix-auth
+  jenkins-plugin-cli --plugin-download-directory /var/jenkins_home/plugins --plugins workflow-aggregator git job-dsl configuration-as-code pipeline-stage-view matrix-auth
 
 # 4. Inject Groovy initialization script
 cat << 'EOF' > "$${INIT_DIR}/01-init-sample-job.groovy"
