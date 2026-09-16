@@ -1,0 +1,15 @@
+{
+  "orders_v1": {
+    "create": {
+      "id": "{{id}}",
+      "name": "Original orders Item 1",
+      "sku": "SKU-ORD-0001",
+      "price": 15.5,
+      "status": "ACTIVE",
+      "upgrade_modified_at": "{{timestamp}}"
+    },
+    "update": {
+      "upgrade_modified_at": "{{timestamp}}"
+    }
+  }
+}

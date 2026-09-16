@@ -1,0 +1,15 @@
+{
+  "products_v1": {
+    "create": {
+      "id": "{{id}}",
+      "name": "Original products Item 1",
+      "sku": "SKU-PRO-0001",
+      "price": 15.5,
+      "status": "ACTIVE",
+      "upgrade_modified_at": "{{timestamp}}"
+    },
+    "update": {
+      "upgrade_modified_at": "{{timestamp}}"
+    }
+  }
+}

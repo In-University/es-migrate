@@ -167,11 +167,13 @@ def stream_report_records(report_file: str):
 
 
 def main():
-    global REPORT_FILE
+    global REPORT_FILE, ES_URL
     if len(sys.argv) > 1:
         for arg_idx, arg in enumerate(sys.argv[1:], start=1):
             if arg in ("--report", "-r", "--report-file") and arg_idx < len(sys.argv) - 1:
                 REPORT_FILE = sys.argv[arg_idx + 1]
+            elif arg in ("--es-url", "-e") and arg_idx < len(sys.argv) - 1:
+                ES_URL = sys.argv[arg_idx + 1].rstrip("/")
             elif not arg.startswith("-") and os.path.exists(arg):
                 REPORT_FILE = arg
 

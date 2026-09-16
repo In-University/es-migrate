@@ -295,11 +295,25 @@ def simulate_index(index: str, templates: Dict[str, Any], idx_idx: int, total_in
 
 
 def main():
-    global CONFIG_DIR
+    global CONFIG_DIR, ES_URL, REPORT_FILE, INDICES_ENV, TOTAL_MUTATIONS, CREATE_RATIO, DELETE_RATIO, UPDATE_RATIO, MUTATE_PCT
     if len(sys.argv) > 1:
         for arg_idx, arg in enumerate(sys.argv[1:], start=1):
             if arg in ("--config-dir", "--config") and arg_idx < len(sys.argv) - 1:
                 CONFIG_DIR = sys.argv[arg_idx + 1]
+            elif arg in ("--indices", "-i") and arg_idx < len(sys.argv) - 1:
+                INDICES_ENV = sys.argv[arg_idx + 1]
+            elif arg in ("--es-url", "-e") and arg_idx < len(sys.argv) - 1:
+                ES_URL = sys.argv[arg_idx + 1].rstrip("/")
+            elif arg in ("--report", "-r", "--report-file") and arg_idx < len(sys.argv) - 1:
+                REPORT_FILE = sys.argv[arg_idx + 1]
+            elif arg in ("--total-mutations", "-n") and arg_idx < len(sys.argv) - 1:
+                TOTAL_MUTATIONS = sys.argv[arg_idx + 1]
+            elif arg in ("--create-ratio",) and arg_idx < len(sys.argv) - 1:
+                CREATE_RATIO = float(sys.argv[arg_idx + 1])
+            elif arg in ("--delete-ratio",) and arg_idx < len(sys.argv) - 1:
+                DELETE_RATIO = float(sys.argv[arg_idx + 1])
+            elif arg in ("--mutate-pct", "-p") and arg_idx < len(sys.argv) - 1:
+                MUTATE_PCT = float(sys.argv[arg_idx + 1])
             elif not arg.startswith("-") and os.path.exists(arg):
                 CONFIG_DIR = arg
 

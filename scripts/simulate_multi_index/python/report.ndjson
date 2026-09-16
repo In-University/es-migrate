@@ -1,0 +1,30 @@
+{"index":"bench_v1","op":"create","id":"doc-11","body":{"id":"doc-11","name":"Original bench-es9 Item 1","sku":"SKU-BEN-0001","price":15.5,"status":"ACTIVE","upgrade_modified_at":"2026-09-16T15:53:28Z","modified_at":"2026-09-16T15:53:28Z"}}
+{"index":"bench_v1","op":"create","id":"doc-12","body":{"id":"doc-12","name":"Original bench-es9 Item 1","sku":"SKU-BEN-0001","price":15.5,"status":"ACTIVE","upgrade_modified_at":"2026-09-16T15:53:28Z","modified_at":"2026-09-16T15:53:28Z"}}
+{"index":"bench_v1","op":"create","id":"doc-13","body":{"id":"doc-13","name":"Original bench-es9 Item 1","sku":"SKU-BEN-0001","price":15.5,"status":"ACTIVE","upgrade_modified_at":"2026-09-16T15:53:28Z","modified_at":"2026-09-16T15:53:28Z"}}
+{"index":"bench_v1","op":"create","id":"doc-14","body":{"id":"doc-14","name":"Original bench-es9 Item 1","sku":"SKU-BEN-0001","price":15.5,"status":"ACTIVE","upgrade_modified_at":"2026-09-16T15:53:28Z","modified_at":"2026-09-16T15:53:28Z"}}
+{"index":"bench_v1","op":"create","id":"doc-15","body":{"id":"doc-15","name":"Original bench-es9 Item 1","sku":"SKU-BEN-0001","price":15.5,"status":"ACTIVE","upgrade_modified_at":"2026-09-16T15:53:28Z","modified_at":"2026-09-16T15:53:28Z"}}
+{"index":"bench_v1","op":"update","id":"doc-5","body":{"upgrade_modified_at":"2026-09-16T15:53:28Z","modified_at":"2026-09-16T15:53:28Z","simulated_update":true,"updated_at":"2026-09-16T15:53:28Z"}}
+{"index":"bench_v1","op":"update","id":"doc-9","body":{"upgrade_modified_at":"2026-09-16T15:53:28Z","modified_at":"2026-09-16T15:53:28Z","simulated_update":true,"updated_at":"2026-09-16T15:53:28Z"}}
+{"index":"bench_v1","op":"update","id":"doc-8","body":{"upgrade_modified_at":"2026-09-16T15:53:28Z","modified_at":"2026-09-16T15:53:28Z","simulated_update":true,"updated_at":"2026-09-16T15:53:28Z"}}
+{"index":"bench_v1","op":"delete","id":"doc-1"}
+{"index":"bench_v1","op":"delete","id":"doc-2"}
+{"index":"orders_v1","op":"create","id":"doc-11","body":{"id":"doc-11","name":"Original orders Item 1","sku":"SKU-ORD-0001","price":15.5,"status":"ACTIVE","upgrade_modified_at":"2026-09-16T15:53:28Z","modified_at":"2026-09-16T15:53:28Z"}}
+{"index":"orders_v1","op":"create","id":"doc-12","body":{"id":"doc-12","name":"Original orders Item 1","sku":"SKU-ORD-0001","price":15.5,"status":"ACTIVE","upgrade_modified_at":"2026-09-16T15:53:28Z","modified_at":"2026-09-16T15:53:28Z"}}
+{"index":"orders_v1","op":"create","id":"doc-13","body":{"id":"doc-13","name":"Original orders Item 1","sku":"SKU-ORD-0001","price":15.5,"status":"ACTIVE","upgrade_modified_at":"2026-09-16T15:53:28Z","modified_at":"2026-09-16T15:53:28Z"}}
+{"index":"orders_v1","op":"create","id":"doc-14","body":{"id":"doc-14","name":"Original orders Item 1","sku":"SKU-ORD-0001","price":15.5,"status":"ACTIVE","upgrade_modified_at":"2026-09-16T15:53:28Z","modified_at":"2026-09-16T15:53:28Z"}}
+{"index":"orders_v1","op":"create","id":"doc-15","body":{"id":"doc-15","name":"Original orders Item 1","sku":"SKU-ORD-0001","price":15.5,"status":"ACTIVE","upgrade_modified_at":"2026-09-16T15:53:28Z","modified_at":"2026-09-16T15:53:28Z"}}
+{"index":"orders_v1","op":"update","id":"doc-10","body":{"upgrade_modified_at":"2026-09-16T15:53:28Z","modified_at":"2026-09-16T15:53:28Z","simulated_update":true,"updated_at":"2026-09-16T15:53:28Z"}}
+{"index":"orders_v1","op":"update","id":"doc-9","body":{"upgrade_modified_at":"2026-09-16T15:53:28Z","modified_at":"2026-09-16T15:53:28Z","simulated_update":true,"updated_at":"2026-09-16T15:53:28Z"}}
+{"index":"orders_v1","op":"update","id":"doc-2","body":{"upgrade_modified_at":"2026-09-16T15:53:28Z","modified_at":"2026-09-16T15:53:28Z","simulated_update":true,"updated_at":"2026-09-16T15:53:28Z"}}
+{"index":"orders_v1","op":"delete","id":"doc-6"}
+{"index":"orders_v1","op":"delete","id":"doc-4"}
+{"index":"products_v1","op":"create","id":"doc-11","body":{"id":"doc-11","name":"Original products Item 1","sku":"SKU-PRO-0001","price":15.5,"status":"ACTIVE","upgrade_modified_at":"2026-09-16T15:53:29Z","modified_at":"2026-09-16T15:53:29Z"}}
+{"index":"products_v1","op":"create","id":"doc-12","body":{"id":"doc-12","name":"Original products Item 1","sku":"SKU-PRO-0001","price":15.5,"status":"ACTIVE","upgrade_modified_at":"2026-09-16T15:53:29Z","modified_at":"2026-09-16T15:53:29Z"}}
+{"index":"products_v1","op":"create","id":"doc-13","body":{"id":"doc-13","name":"Original products Item 1","sku":"SKU-PRO-0001","price":15.5,"status":"ACTIVE","upgrade_modified_at":"2026-09-16T15:53:29Z","modified_at":"2026-09-16T15:53:29Z"}}
+{"index":"products_v1","op":"create","id":"doc-14","body":{"id":"doc-14","name":"Original products Item 1","sku":"SKU-PRO-0001","price":15.5,"status":"ACTIVE","upgrade_modified_at":"2026-09-16T15:53:29Z","modified_at":"2026-09-16T15:53:29Z"}}
+{"index":"products_v1","op":"create","id":"doc-15","body":{"id":"doc-15","name":"Original products Item 1","sku":"SKU-PRO-0001","price":15.5,"status":"ACTIVE","upgrade_modified_at":"2026-09-16T15:53:29Z","modified_at":"2026-09-16T15:53:29Z"}}
+{"index":"products_v1","op":"update","id":"doc-10","body":{"upgrade_modified_at":"2026-09-16T15:53:29Z","modified_at":"2026-09-16T15:53:29Z","simulated_update":true,"updated_at":"2026-09-16T15:53:29Z"}}
+{"index":"products_v1","op":"update","id":"doc-2","body":{"upgrade_modified_at":"2026-09-16T15:53:29Z","modified_at":"2026-09-16T15:53:29Z","simulated_update":true,"updated_at":"2026-09-16T15:53:29Z"}}
+{"index":"products_v1","op":"update","id":"doc-7","body":{"upgrade_modified_at":"2026-09-16T15:53:29Z","modified_at":"2026-09-16T15:53:29Z","simulated_update":true,"updated_at":"2026-09-16T15:53:29Z"}}
+{"index":"products_v1","op":"delete","id":"doc-9"}
+{"index":"products_v1","op":"delete","id":"doc-6"}
