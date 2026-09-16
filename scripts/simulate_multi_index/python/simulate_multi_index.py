@@ -23,8 +23,8 @@ ES_URL = os.environ.get("ES_URL", os.environ.get("ES9_URL", "http://localhost:92
 ES_USER = os.environ.get("ES_USER", os.environ.get("ES9_USER", "elastic"))
 ES_PW = os.environ.get("ES_PASS", os.environ.get("ES9_PASS", os.environ.get("ES9_PW", os.environ.get("ES_PW", ""))))
 INDICES_ENV = os.environ.get("INDICES", os.environ.get("INDEX", ""))
-SAMPLE_FILE = os.environ.get("SAMPLE_FILE", os.path.join(SCRIPT_DIR, "sample_templates.json"))
-REPORT_FILE = os.environ.get("REPORT_FILE", os.path.join(SCRIPT_DIR, "report.json"))
+CONFIG_DIR = os.environ.get("CONFIG_DIR", os.path.join(SCRIPT_DIR, "configs"))
+REPORT_FILE = os.environ.get("REPORT_FILE", os.path.join(SCRIPT_DIR, "report.ndjson"))
 MUTATE_PCT = float(os.environ.get("MUTATE_PCT", "0.10"))
 CREATE_RATIO = float(os.environ.get("CREATE_RATIO", "0.30"))
 UPDATE_RATIO = float(os.environ.get("UPDATE_RATIO", "0.60"))
@@ -100,47 +100,59 @@ def render_template(template: Any, seq: int, doc_id: str, seed: int) -> Any:
     return process_node(template)
 
 
-def load_templates() -> Dict[str, Any]:
-    templates = {}
+def parse_template_definition(data: Any) -> Dict[str, Any]:
+    """Parse template definition containing 'create' and optional 'update' schemas:
+       {"create": {...}, "update": {...}}
+       or directly the create schema dict: {...}
+    """
+    if not isinstance(data, dict):
+        return {"create": data, "update": None}
 
-    def add_content(data: Any):
+    if "create" in data or "update" in data:
+        return {
+            "create": data.get("create", {}),
+            "update": data.get("update")
+        }
+    return {"create": data, "update": None}
+
+
+def load_templates(target_path: str = None) -> Dict[str, Dict[str, Any]]:
+    if not target_path:
+        target_path = CONFIG_DIR
+    templates: Dict[str, Dict[str, Any]] = {}
+
+    def add_content(data: Any, file_source: str = ""):
         if isinstance(data, dict):
             for k, v in data.items():
-                if isinstance(v, dict):
-                    tmpl = v.get("create_template") or v
-                    templates[k] = tmpl
-                else:
-                    templates[k] = v
+                parsed = parse_template_definition(v)
+                templates[k] = parsed
         elif isinstance(data, list):
             for item in data:
                 if isinstance(item, dict):
                     idx_name = item.get("es_index") or item.get("index")
-                    tmpl = item.get("create_payload") or item.get("template") or item
                     if idx_name:
-                        templates[idx_name] = tmpl
+                        raw_tmpl = item.get("template") or item
+                        parsed = parse_template_definition(raw_tmpl)
+                        templates[idx_name] = parsed
 
-    if not os.path.exists(SAMPLE_FILE):
+    if not os.path.isdir(target_path):
+        print(f"[ERROR] Config directory '{target_path}' not found or is not a directory. Indices must use config files.", file=sys.stderr)
         return templates
 
-    if os.path.isdir(SAMPLE_FILE):
-        print(f"[INFO] Scanning folder for sample JSON templates: {SAMPLE_FILE}")
-        for root, _, files in os.walk(SAMPLE_FILE):
-            for file in sorted(files):
-                if file.endswith(".json"):
-                    full_path = os.path.join(root, file)
-                    try:
-                        with open(full_path, "r", encoding="utf-8") as f:
-                            add_content(json.load(f))
-                    except Exception as e:
-                        print(f"[WARN] Could not read {full_path}: {e}", file=sys.stderr)
-    else:
-        print(f"[INFO] Reading single template file: {SAMPLE_FILE}")
-        try:
-            with open(SAMPLE_FILE, "r", encoding="utf-8") as f:
-                add_content(json.load(f))
-        except Exception as e:
-            print(f"[WARN] Could not read {SAMPLE_FILE}: {e}", file=sys.stderr)
+    print(f"[INFO] Scanning config folder: {target_path}")
+    json_count = 0
+    for root, _, files in os.walk(target_path):
+        for file in sorted(files):
+            if file.endswith(".json"):
+                full_path = os.path.join(root, file)
+                try:
+                    with open(full_path, "r", encoding="utf-8") as f:
+                        add_content(json.load(f), file)
+                        json_count += 1
+                except Exception as e:
+                    print(f"[WARN] Could not read {full_path}: {e}", file=sys.stderr)
 
+    print(f"[INFO] Loaded {len(templates)} index template(s) from {json_count} config file(s): {', '.join(templates.keys())}")
     return templates
 
 
@@ -156,10 +168,22 @@ def bulk_send(index: str, ndjson_lines: List[str]):
                 print(f"   [Bulk Error] [{op}] ID {meta.get('_id')}: {meta.get('error')}", file=sys.stderr)
 
 
-def simulate_index(index: str, templates: Dict[str, Any], idx_idx: int, total_indices: int) -> Dict[str, Any]:
+def simulate_index(index: str, templates: Dict[str, Any], idx_idx: int, total_indices: int, report_handle=None) -> Dict[str, Any]:
     print(f"\n--------------------------------------------------")
     print(f"[{idx_idx}/{total_indices}] Processing Index: '{index}'")
     print(f"--------------------------------------------------")
+
+    if index not in templates:
+        print(f"[ERROR] Index '{index}' does not have a config file in '{CONFIG_DIR}'. No fallback allowed.", file=sys.stderr)
+        return {"created": [], "updated": [], "deleted": []}
+
+    idx_cfg = templates[index]
+    create_tmpl = idx_cfg.get("create")
+    update_tmpl = idx_cfg.get("update")
+
+    if not create_tmpl:
+        print(f"[ERROR] Index '{index}' is missing 'create' pattern in config file. No fallback allowed.", file=sys.stderr)
+        return {"created": [], "updated": [], "deleted": []}
 
     print("   [1/4] Querying existing document count...")
     try:
@@ -168,7 +192,7 @@ def simulate_index(index: str, templates: Dict[str, Any], idx_idx: int, total_in
         print(f"         Existing docs count: {total_docs}")
     except Exception as e:
         print(f"[ERROR] Could not query index '{index}': {e}", file=sys.stderr)
-        return {"created": [], "updated": [], "deleted": [], "created_samples": {}, "updated_samples": {}}
+        return {"created": [], "updated": [], "deleted": []}
 
     existing_ids = []
     if total_docs > 0:
@@ -204,28 +228,18 @@ def simulate_index(index: str, templates: Dict[str, Any], idx_idx: int, total_in
     delete_ids = shuffled_ids[update_n:update_n + delete_n]
     created_ids = []
 
-    tmpl = templates.get(index) or templates.get("default") or {
-        "id": "doc-{{SEQ}}",
-        "name": "Name {{SEQ}}",
-        "created_at": "{{TIMESTAMP}}",
-        "updated_at": "{{TIMESTAMP}}",
-        "modified_at": "{{TIMESTAMP}}"
-    }
-
     bulk_lines = []
-    created_samples = {}
-    updated_samples = {}
 
     # Creates
     max_seq = total_docs
     for i in range(create_n):
         seq = max_seq + i + 1
         doc_id = f"doc-{seq}"
-        doc_data = render_template(tmpl, seq, doc_id, SEED)
+        doc_data = render_template(create_tmpl, seq, doc_id, SEED)
         bulk_lines.extend([json.dumps({"index": {"_id": doc_id}}), json.dumps(doc_data, separators=(",", ":"))])
         created_ids.append(doc_id)
-        if len(created_samples) < 5:
-            created_samples[doc_id] = doc_data
+        if report_handle:
+            report_handle.write(json.dumps({"index": index, "op": "create", "id": doc_id, "body": doc_data}, separators=(",", ":")) + "\n")
 
         if len(bulk_lines) >= BATCH * 2:
             bulk_send(index, bulk_lines)
@@ -234,15 +248,24 @@ def simulate_index(index: str, templates: Dict[str, Any], idx_idx: int, total_in
     # Updates
     now_ts = current_iso_time()
     for idx, doc_id in enumerate(update_ids):
-        update_payload = {
-            "updated_at": now_ts,
-            "modified_at": now_ts,
-            "simulated_update": True,
-            "name": f"Name {idx + 1} UPDATED"
-        }
+        if update_tmpl:
+            update_payload = render_template(update_tmpl, idx + 1, doc_id, SEED)
+            if "simulated_update" not in update_payload:
+                update_payload["simulated_update"] = True
+            if "updated_at" not in update_payload:
+                update_payload["updated_at"] = now_ts
+            if "modified_at" not in update_payload:
+                update_payload["modified_at"] = now_ts
+        else:
+            update_payload = {
+                "updated_at": now_ts,
+                "modified_at": now_ts,
+                "simulated_update": True,
+                "name": f"Name {idx + 1} UPDATED"
+            }
         bulk_lines.extend([json.dumps({"update": {"_id": doc_id}}), json.dumps({"doc": update_payload}, separators=(",", ":"))])
-        if len(updated_samples) < 5:
-            updated_samples[doc_id] = update_payload
+        if report_handle:
+            report_handle.write(json.dumps({"index": index, "op": "update", "id": doc_id, "body": update_payload}, separators=(",", ":")) + "\n")
 
         if len(bulk_lines) >= BATCH * 2:
             bulk_send(index, bulk_lines)
@@ -251,6 +274,8 @@ def simulate_index(index: str, templates: Dict[str, Any], idx_idx: int, total_in
     # Deletes
     for doc_id in delete_ids:
         bulk_lines.append(json.dumps({"delete": {"_id": doc_id}}))
+        if report_handle:
+            report_handle.write(json.dumps({"index": index, "op": "delete", "id": doc_id}, separators=(",", ":")) + "\n")
         if len(bulk_lines) >= BATCH * 2:
             bulk_send(index, bulk_lines)
             bulk_lines = []
@@ -265,49 +290,58 @@ def simulate_index(index: str, templates: Dict[str, Any], idx_idx: int, total_in
     return {
         "created": created_ids,
         "updated": update_ids,
-        "deleted": delete_ids,
-        "created_samples": created_samples,
-        "updated_samples": updated_samples
+        "deleted": delete_ids
     }
 
 
 def main():
+    global CONFIG_DIR
+    if len(sys.argv) > 1:
+        for arg_idx, arg in enumerate(sys.argv[1:], start=1):
+            if arg in ("--config-dir", "--config") and arg_idx < len(sys.argv) - 1:
+                CONFIG_DIR = sys.argv[arg_idx + 1]
+            elif not arg.startswith("-") and os.path.exists(arg):
+                CONFIG_DIR = arg
+
     print("==================================================")
     print(">> MULTI-INDEX ES MUTATION SIMULATOR (PYTHON CORE)")
     print("==================================================")
     print(f"   Start Time     : {START_DATE}")
     print(f"   ES URL         : {ES_URL}")
     print(f"   Auth User      : {ES_USER}")
-    print(f"   Sample Path    : {SAMPLE_FILE}")
+    print(f"   Config Dir     : {CONFIG_DIR}")
     print(f"   Report File    : {REPORT_FILE}")
     print(f"   Mutate Fraction: {MUTATE_PCT}")
     print(f"   C / U / D Ratio: {CREATE_RATIO} / {UPDATE_RATIO} / {DELETE_RATIO}")
     print("--------------------------------------------------")
 
     templates = load_templates()
+    if not templates:
+        print(f"[ERROR] No index templates found in '{CONFIG_DIR}'. Indices must have config files.", file=sys.stderr)
+        sys.exit(1)
+
     if INDICES_ENV:
         indices = [i.strip() for i in INDICES_ENV.split(",") if i.strip()]
-    elif templates:
-        indices = [k for k in templates.keys() if k != "default"]
+        missing = [idx for idx in indices if idx not in templates]
+        if missing:
+            print(f"[ERROR] The following indices do not have config files in '{CONFIG_DIR}': {missing}. No fallback allowed.", file=sys.stderr)
+            sys.exit(1)
     else:
-        indices = ["bench-es9"]
+        indices = sorted(list(templates.keys()))
 
     print(f"[INFO] Target Indices ({len(indices)}): {', '.join(indices)}")
-    report_data = {}
 
     tot_cr, tot_up, tot_del = 0, 0, 0
-    for idx_idx, idx in enumerate(indices, start=1):
-        res = simulate_index(idx, templates, idx_idx, len(indices))
-        report_data[idx] = res
-        tot_cr += len(res["created"])
-        tot_up += len(res["updated"])
-        tot_del += len(res["deleted"])
-
     try:
-        with open(REPORT_FILE, "w", encoding="utf-8") as f:
-            json.dump(report_data, f, indent=2)
+        with open(REPORT_FILE, "w", encoding="utf-8") as rf:
+            for idx_idx, idx in enumerate(indices, start=1):
+                res = simulate_index(idx, templates, idx_idx, len(indices), report_handle=rf)
+                tot_cr += len(res["created"])
+                tot_up += len(res["updated"])
+                tot_del += len(res["deleted"])
+                rf.flush()
     except Exception as e:
-        print(f"[ERROR] Could not save report: {e}", file=sys.stderr)
+        print(f"[ERROR] Could not write report file '{REPORT_FILE}': {e}", file=sys.stderr)
 
     elapsed = round(time.time() - START_TIME, 2)
     end_date = time.strftime('%Y-%m-%d %H:%M:%S UTC', time.gmtime())

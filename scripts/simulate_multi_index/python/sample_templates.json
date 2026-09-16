@@ -17,13 +17,5 @@
     "created_at": "{{timestamp}}",
     "updated_at": "{{timestamp}}",
     "modified_at": "{{timestamp}}"
-  },
-  "default": {
-    "id": "doc-{{seq}}",
-    "name": "Item Name {{seq}}",
-    "status": "ACTIVE",
-    "created_at": "{{timestamp}}",
-    "updated_at": "{{timestamp}}",
-    "modified_at": "{{timestamp}}"
   }
 }

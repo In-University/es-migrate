@@ -1,0 +1,20 @@
+{
+  "ecommerce_orders": {
+    "create": {
+      "id": "order-{{seq}}",
+      "order_number": "ORD-{{seq}}",
+      "name": "Order {{seq}}",
+      "status": "PROCESSING",
+      "created_at": "{{timestamp}}",
+      "updated_at": "{{timestamp}}",
+      "modified_at": "{{timestamp}}"
+    },
+    "update": {
+      "name": "Order {{seq}} UPDATED",
+      "status": "COMPLETED",
+      "simulated_update": true,
+      "updated_at": "{{timestamp}}",
+      "modified_at": "{{timestamp}}"
+    }
+  }
+}

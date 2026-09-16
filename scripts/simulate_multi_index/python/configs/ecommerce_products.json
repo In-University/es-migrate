@@ -1,0 +1,21 @@
+{
+  "ecommerce_products": {
+    "create": {
+      "id": "doc-{{seq}}",
+      "sku": "SKU-{{seq}}",
+      "name": "Product {{seq}}",
+      "status": "ACTIVE",
+      "price": "{{price}}",
+      "created_at": "{{timestamp}}",
+      "updated_at": "{{timestamp}}",
+      "modified_at": "{{timestamp}}"
+    },
+    "update": {
+      "name": "Product {{seq}} UPDATED",
+      "status": "UPDATED",
+      "simulated_update": true,
+      "updated_at": "{{timestamp}}",
+      "modified_at": "{{timestamp}}"
+    }
+  }
+}

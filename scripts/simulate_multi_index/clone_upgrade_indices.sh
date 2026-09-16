@@ -7,6 +7,7 @@
 #   ES_URL           Elasticsearch Base URL        (default http://localhost:9200)
 #   ES_USER          Basic Auth Username           (default elastic)
 #   ES_PASS / ES_PW  Basic Auth Password           (default "")
+#   INDICES          Comma-separated list of indices/aliases to clone (default all)
 #   SUFFIX           Suffix for cloned indices     (default _upgrade)
 #   RESET            Drop target index if exists?  (default true)
 #   BATCH_SIZE       Scroll batch size for reindex (default 5000)
@@ -17,6 +18,7 @@ ES_URL="${ES_URL:-${ES9_URL:-${ES6_URL:-http://localhost:9200}}}"
 ES_URL="${ES_URL%/}"
 ES_USER="${ES_USER:-${ES9_USER:-${ES6_USER:-elastic}}}"
 ES_PW="${ES_PASS:-${ES9_PASS:-${ES6_PW:-${ES_PW:-}}}}"
+INDICES="${INDICES:-${CLONE_INDICES:-}}"
 SUFFIX="${SUFFIX:-_upgrade}"
 RESET="${RESET:-true}"
 BATCH_SIZE="${BATCH_SIZE:-5000}"
@@ -32,6 +34,7 @@ es_curl() {
 echo ">> ES Alias Concrete Index Cloner (Safe ES6/ES9)"
 echo "   Elasticsearch URL : $ES_URL"
 echo "   Auth User         : $ES_USER"
+echo "   Filter Indices    : ${INDICES:-ALL}"
 echo "   Target Suffix     : $SUFFIX"
 echo "   Reindex Batch Size: $BATCH_SIZE"
 echo "--------------------------------------------------"
@@ -59,12 +62,40 @@ if [ -z "$CONCRETE_INDICES" ]; then
   fi
 fi
 
+# Filter specific indices if INDICES env var is set
+if [ -n "$INDICES" ]; then
+  echo ">> Filtering concrete indices based on INDICES='$INDICES'..."
+  FILTERED_INDICES=""
+  IFS=',' read -ra ADDR <<< "$INDICES"
+  for raw_idx in "${ADDR[@]}"; do
+    target_idx="$(echo "$raw_idx" | xargs)"
+    [ -z "$target_idx" ] && continue
+
+    # Check if target_idx is already in concrete indices
+    if echo "$CONCRETE_INDICES" | grep -qw "$target_idx" 2>/dev/null; then
+      FILTERED_INDICES="${FILTERED_INDICES} ${target_idx}"
+    else
+      # Check if target_idx is an alias name and resolve to its underlying concrete index
+      resolved=$(echo "$ALIASES_JSON" | jq -r --arg a "$target_idx" 'to_entries[] | select(.value.aliases[$a] != null) | .key' 2>/dev/null || true)
+      if [ -n "$resolved" ]; then
+        for r_idx in $resolved; do
+          FILTERED_INDICES="${FILTERED_INDICES} ${r_idx}"
+        done
+      else
+        # Direct index name specified
+        FILTERED_INDICES="${FILTERED_INDICES} ${target_idx}"
+      fi
+    fi
+  done
+  CONCRETE_INDICES="$(echo "$FILTERED_INDICES" | tr ' ' '\n' | sort -u | xargs)"
+fi
+
 if [ -z "$CONCRETE_INDICES" ]; then
-  echo "WARNING: No concrete indices found on ES cluster."
+  echo "WARNING: No concrete indices matching criteria found on ES cluster."
   exit 0
 fi
 
-echo ">> Found concrete index(es):"
+echo ">> Target concrete index(es) to clone:"
 for idx in $CONCRETE_INDICES; do
   echo "   - $idx"
 done
