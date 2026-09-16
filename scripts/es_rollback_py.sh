@@ -811,9 +811,16 @@ phase_verify() {
   fi
 
   if [ -s "$STATE_DIR/es9_ids.sorted" ] && [ "$SAMPLE_N" -gt 0 ]; then
-    awk -v n="$SAMPLE_N" -v t="$(wc -l <"$STATE_DIR/es9_ids.sorted" | tr -d ' ')" \
-      'BEGIN{srand(42)} rand() < n/t' "$STATE_DIR/es9_ids.sorted" \
-      | head -n "$SAMPLE_N" >"$WORK/verify.sample.ids"
+    # Knuth's Algorithm S: exactly min(SAMPLE_N, total) samples in O(1) memory
+    awk -v n="$SAMPLE_N" -v t="$(wc -l <"$STATE_DIR/es9_ids.sorted" | tr -d ' ')" '
+      BEGIN { srand(42); needed = (n < t ? n : t) }
+      {
+        if (needed > 0 && rand() < needed / (t - NR + 1)) {
+          print $0
+          needed--
+        }
+      }
+    ' "$STATE_DIR/es9_ids.sorted" >"$WORK/verify.sample.ids"
     if [ -s "$WORK/verify.sample.ids" ]; then
       id_list_body "$WORK/verify.sample.ids" "$WORK/verify.sample.mget.json" mget
       es9 POST "$ES9_URL/$SRC_INDEX/_mget" application/json "$WORK/verify.sample.mget.json" >/dev/null \

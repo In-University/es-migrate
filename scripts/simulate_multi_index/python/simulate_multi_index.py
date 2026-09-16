@@ -30,11 +30,9 @@ CREATE_RATIO = float(os.environ.get("CREATE_RATIO", "0.30"))
 UPDATE_RATIO = float(os.environ.get("UPDATE_RATIO", "0.60"))
 DELETE_RATIO = float(os.environ.get("DELETE_RATIO", "0.10"))
 TOTAL_MUTATIONS = os.environ.get("TOTAL_MUTATIONS", "")
+MODIFIED_FIELD = os.environ.get("MODIFIED_FIELD", os.environ.get("UPGRADE_MODIFIED_FIELD", "upgrade_modified_at"))
 BATCH = int(os.environ.get("BATCH", "2000"))
 SEED = int(os.environ.get("SEED", "42"))
-
-WORDS = ["fast", "durable", "compact", "premium", "eco", "smart", "classic", "pro", "lite", "max"]
-
 
 def current_iso_time() -> str:
     return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
@@ -72,27 +70,21 @@ def es_http(method: str, path: str, body: Any = None, is_bulk: bool = False) -> 
 
 
 def render_template(template: Any, seq: int, doc_id: str, seed: int) -> Any:
-    rnd = random.Random(seed + seq)
     now_ts = current_iso_time()
-    rand_word = rnd.choice(WORDS)
-    rand_price = round(rnd.uniform(9.99, 499.99), 2)
 
     def process_node(node: Any) -> Any:
         if isinstance(node, dict):
             res = {k: process_node(v) for k, v in node.items()}
-            if "modified_at" not in res:
-                res["modified_at"] = now_ts
+            if MODIFIED_FIELD not in res:
+                res[MODIFIED_FIELD] = now_ts
             return res
         elif isinstance(node, list):
             return [process_node(item) for item in node]
         elif isinstance(node, str):
-            if node in ("{{price}}", "{price}"):
-                return rand_price
             val = node
             val = val.replace("{{SEQ}}", str(seq)).replace("{{seq}}", str(seq)).replace("{seq}", str(seq))
             val = val.replace("{{ID}}", doc_id).replace("{{id}}", doc_id).replace("{id}", doc_id)
             val = val.replace("{{TIMESTAMP}}", now_ts).replace("{{timestamp}}", now_ts).replace("{timestamp}", now_ts)
-            val = val.replace("{{random_word}}", rand_word).replace("{random_word}", rand_word)
             val = val.replace("{{name}}", f"Name {seq}").replace("{name}", f"Name {seq}")
             return val
         return node
@@ -250,18 +242,11 @@ def simulate_index(index: str, templates: Dict[str, Any], idx_idx: int, total_in
     for idx, doc_id in enumerate(update_ids):
         if update_tmpl:
             update_payload = render_template(update_tmpl, idx + 1, doc_id, SEED)
-            if "simulated_update" not in update_payload:
-                update_payload["simulated_update"] = True
-            if "updated_at" not in update_payload:
-                update_payload["updated_at"] = now_ts
-            if "modified_at" not in update_payload:
-                update_payload["modified_at"] = now_ts
+            if MODIFIED_FIELD not in update_payload:
+                update_payload[MODIFIED_FIELD] = now_ts
         else:
             update_payload = {
-                "updated_at": now_ts,
-                "modified_at": now_ts,
-                "simulated_update": True,
-                "name": f"Name {idx + 1} UPDATED"
+                MODIFIED_FIELD: now_ts
             }
         bulk_lines.extend([json.dumps({"update": {"_id": doc_id}}), json.dumps({"doc": update_payload}, separators=(",", ":"))])
         if report_handle:

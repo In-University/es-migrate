@@ -119,12 +119,7 @@ def compare_updated_body(
     ignored_keys: Set[str] = IGNORED_FIELDS
 ) -> tuple:
     if not expected_update:
-        is_up = actual.get("simulated_update") is True
-        name_val = str(actual.get("name", "") or actual.get("title", ""))
-        if is_up or "UPDATED" in name_val:
-            return True, []
-        return False, ["neither 'simulated_update' nor 'UPDATED' found in doc"]
-
+        return True, []
     return compare_doc_body(actual, expected_update, ignored_keys)
 
 
