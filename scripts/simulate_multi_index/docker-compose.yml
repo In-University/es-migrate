@@ -1,0 +1,43 @@
+version: '3.8'
+
+services:
+  elasticsearch6:
+    image: docker.elastic.co/elasticsearch/elasticsearch:6.8.21
+    container_name: es6-test
+    environment:
+      - discovery.type=single-node
+      - bootstrap.memory_lock=true
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+      - xpack.security.enabled=false
+      - http.port=9200
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    # Map cả 2 cổng 9200 (ES6) và 9201 (ES9) qua container này
+    ports:
+      - "9200:9200"
+      - "9201:9201"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9200/_cluster/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+
+  elasticsearch9:
+    image: docker.elastic.co/elasticsearch/elasticsearch:9.2.3
+    container_name: es9-test
+    # CHÌA KHÓA: Dùng chung localhost với ES6
+    network_mode: "service:elasticsearch6"
+    environment:
+      - discovery.type=single-node
+      - bootstrap.memory_lock=true
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+      - xpack.security.enabled=false
+      # Đổi ES9 sang 9201 để không đụng cổng 9200 của ES6
+      - http.port=9201
+      # ES9 kết nối sang ES6 qua localhost:9200
+      - reindex.remote.whitelist=localhost:9200,127.0.0.1:9200
+    depends_on:
+      elasticsearch6:
+        condition: service_healthy
