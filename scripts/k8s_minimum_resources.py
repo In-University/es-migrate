@@ -156,16 +156,18 @@ def workload_pod_spec(doc: Dict) -> Dict:
     return ((spec.get("template") or {}).get("spec") or {})
 
 
-def load_documents(folder: Path) -> List[Dict]:
+def load_documents(folder: Path) -> Tuple[List[Dict], int]:
     docs: List[Dict] = []
+    file_count = 0
     for path in sorted(folder.rglob("*")):
         if not path.is_file() or path.suffix.lower() not in {".yaml", ".yml"}:
             continue
+        file_count += 1
         with path.open("r", encoding="utf-8") as handle:
             for doc in yaml.safe_load_all(handle):
                 if isinstance(doc, dict):
                     docs.append(doc)
-    return docs
+    return docs, file_count
 
 
 def build_hpa_min_replicas(docs: Iterable[Dict]) -> Dict[Tuple[str, str, str], int]:
@@ -187,7 +189,7 @@ def build_hpa_min_replicas(docs: Iterable[Dict]) -> Dict[Tuple[str, str, str], i
 
 
 def calculate_minimum_resources(folder: Path) -> Dict:
-    docs = load_documents(folder)
+    docs, file_count = load_documents(folder)
     hpa_index = build_hpa_min_replicas(docs)
 
     workloads: List[WorkloadResource] = []
@@ -243,6 +245,11 @@ def calculate_minimum_resources(folder: Path) -> Dict:
 
     return {
         "folder": str(folder),
+        "summary": {
+            "yaml_files_scanned": file_count,
+            "manifest_documents_scanned": len(docs),
+            "workloads_considered": len(workloads),
+        },
         "total": {
             "cpu_millicores": grand_cpu,
             "cpu_cores": round(grand_cpu / CPU_MILLI, 3),
@@ -263,10 +270,38 @@ def calculate_minimum_resources(folder: Path) -> Dict:
 
 
 def render_table(result: Dict) -> str:
-    lines = ["Node Group | CPU (cores) | Memory (Mi)", "---|---:|---:"]
+    lines = [
+        "Summary | Value",
+        "---|---:",
+        f"YAML files scanned | {result['summary']['yaml_files_scanned']}",
+        f"Manifest documents scanned | {result['summary']['manifest_documents_scanned']}",
+        f"Workloads considered | {result['summary']['workloads_considered']}",
+        f"Total CPU (cores) | {result['total']['cpu_cores']:.3f}",
+        f"Total Memory (Mi) | {result['total']['memory_mib']:.3f}",
+        "",
+        "Node Group Totals | CPU (cores) | Memory (Mi) | Workloads",
+        "---|---:|---:|---:",
+    ]
     for group_name, data in result["groups"].items():
-        lines.append(f"{group_name} | {data['cpu_cores']:.3f} | {data['memory_mib']:.3f}")
-    lines.append(f"TOTAL | {result['total']['cpu_cores']:.3f} | {result['total']['memory_mib']:.3f}")
+        lines.append(
+            f"{group_name} | {data['cpu_cores']:.3f} | {data['memory_mib']:.3f} | {len(data['workloads'])}"
+        )
+
+    lines.extend(
+        [
+            "",
+            "Workload Details | Node Group | Namespace | Kind | Replicas | CPU (cores) | Memory (Mi)",
+            "---|---|---|---|---:|---:|---:",
+        ]
+    )
+    for group_name, data in result["groups"].items():
+        for workload in sorted(data["workloads"], key=lambda item: (item["namespace"], item["kind"], item["name"])):
+            lines.append(
+                f"{workload['name']} | {group_name} | {workload['namespace']} | {workload['kind']} | "
+                f"{workload['replicas']} | {workload['cpu_millicores'] / CPU_MILLI:.3f} | "
+                f"{workload['memory_bytes'] / (1024**2):.3f}"
+            )
+
     return "\n".join(lines)
 
 

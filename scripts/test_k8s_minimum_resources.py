@@ -87,6 +87,9 @@ class K8sMinimumResourcesTests(unittest.TestCase):
 
             self.assertEqual(result["total"]["cpu_millicores"], 1500)
             self.assertEqual(result["total"]["memory_bytes"], 1342177280)
+            self.assertEqual(result["summary"]["yaml_files_scanned"], 2)
+            self.assertEqual(result["summary"]["manifest_documents_scanned"], 3)
+            self.assertEqual(result["summary"]["workloads_considered"], 2)
 
             groups = result["groups"]
             self.assertIn("selector[pool=general]", groups)
@@ -97,6 +100,12 @@ class K8sMinimumResourcesTests(unittest.TestCase):
 
             self.assertEqual(groups["affinity[dedicated:In:batch]"]["cpu_millicores"], 1000)
             self.assertEqual(groups["affinity[dedicated:In:batch]"]["memory_mib"], 1024.0)
+
+            table = kmr.render_table(result)
+            self.assertIn("Summary | Value", table)
+            self.assertIn("Node Group Totals | CPU (cores) | Memory (Mi) | Workloads", table)
+            self.assertIn("Workload Details | Node Group | Namespace | Kind | Replicas | CPU (cores) | Memory (Mi)", table)
+            self.assertIn("web | selector[pool=general] | prod | Deployment | 2 | 0.500 | 256.000", table)
 
     def test_init_container_sizing_rule(self):
         pod_spec = {
