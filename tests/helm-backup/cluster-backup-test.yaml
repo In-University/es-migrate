@@ -1,0 +1,128 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: user-workload
+---
+# Original deployments in default namespace
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: payment-deployment
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: payment
+  template:
+    metadata:
+      labels:
+        app: payment
+    spec:
+      containers:
+      - name: payment
+        image: postgres:16.4
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: inventory-deployment
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: inventory
+  template:
+    metadata:
+      labels:
+        app: inventory
+    spec:
+      containers:
+      - name: inventory-web
+        image: httpd:2.4.60
+      - name: inventory-worker
+        image: busybox:1.36.1
+        command: ["sh", "-c", "sleep 3600"]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: app-backup-deployment
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: app-backup-orig
+  template:
+    metadata:
+      labels:
+        app: app-backup-orig
+    spec:
+      containers:
+      - name: app-backup
+        image: node:22-alpine
+        command: ["sh", "-c", "sleep 3600"]
+---
+# Backup deployments in user-workload namespace
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: payment-backup-deployment
+  namespace: user-workload
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: payment-backup
+  template:
+    metadata:
+      labels:
+        app: payment-backup
+    spec:
+      containers:
+      - name: payment-backup
+        image: postgres:14.0
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: inventory-backup-deployment
+  namespace: user-workload
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: inventory-backup
+  template:
+    metadata:
+      labels:
+        app: inventory-backup
+    spec:
+      containers:
+      - name: inventory-web-backup
+        image: httpd:2.4.50
+      - name: inventory-worker-backup
+        image: busybox:1.35.0
+        command: ["sh", "-c", "sleep 3600"]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: app-backup-uq-deployment
+  namespace: user-workload
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: app-backup-uq
+  template:
+    metadata:
+      labels:
+        app: app-backup-uq
+    spec:
+      containers:
+      - name: app-backup-uq
+        image: node:18-alpine
+        command: ["sh", "-c", "sleep 3600"]

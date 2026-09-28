@@ -1,0 +1,180 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: user-workload
+---
+### BACKUP CLUSTER (kind-cluster-backup) ###
+
+# Original deployments in default namespace
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: payment-deployment
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: payment
+  template:
+    metadata:
+      labels:
+        app: payment
+    spec:
+      containers:
+      - name: payment
+        image: postgres:16.4
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: inventory-deployment
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: inventory
+  template:
+    metadata:
+      labels:
+        app: inventory
+    spec:
+      containers:
+      - name: inventory-web
+        image: httpd:2.4.60
+      - name: inventory-worker
+        image: busybox:1.36.1
+        command: ["sh", "-c", "sleep 3600"]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: app-uq-deployment
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: app-uq
+  template:
+    metadata:
+      labels:
+        app: app-uq
+    spec:
+      containers:
+      - name: app-uq
+        image: node:22-alpine
+        command: ["sh", "-c", "sleep 3600"]
+---
+
+# === Backup deployments in user-workload namespace ===
+
+# Scenario 1: Standard single container (container name matches)
+# payment-backup-deployment -> remove -backup -> payment-deployment (found in default ns)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: payment-backup-deployment
+  namespace: user-workload
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: payment-backup
+  template:
+    metadata:
+      labels:
+        app: payment-backup
+    spec:
+      containers:
+      - name: payment-backup
+        image: postgres:14.0
+---
+# Scenario 2: Multi-container with -backup suffix on containers
+# inventory-backup-deployment -> remove -backup -> inventory-deployment (found in default ns)
+# containers: inventory-web-backup -> inventory-web, inventory-worker-backup -> inventory-worker
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: inventory-backup-deployment
+  namespace: user-workload
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: inventory-backup
+  template:
+    metadata:
+      labels:
+        app: inventory-backup
+    spec:
+      containers:
+      - name: inventory-web-backup
+        image: httpd:2.4.50
+      - name: inventory-worker-backup
+        image: busybox:1.35.0
+        command: ["sh", "-c", "sleep 3600"]
+---
+# Scenario 3: Deployment with -backup in the middle
+# app-backup-uq-deployment -> remove first -backup -> app-uq-deployment (found in default ns)
+# container: app-backup-uq -> remove -backup -> app-uq (matches)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: app-backup-uq-deployment
+  namespace: user-workload
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: app-backup-uq
+  template:
+    metadata:
+      labels:
+        app: app-backup-uq
+    spec:
+      containers:
+      - name: app-backup-uq
+        image: node:18-alpine
+        command: ["sh", "-c", "sleep 3600"]
+---
+# Scenario 4: Ignored deployment (dlbiz)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dlbiz-worker-backup
+  namespace: user-workload
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: dlbiz-backup
+  template:
+    metadata:
+      labels:
+        app: dlbiz-backup
+    spec:
+      containers:
+      - name: dlbiz
+        image: nginx:1.20
+---
+# Scenario 5: Orphan backup (no matching original)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: orphan-backup-deployment
+  namespace: user-workload
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: orphan-backup
+  template:
+    metadata:
+      labels:
+        app: orphan-backup
+    spec:
+      containers:
+      - name: orphan
+        image: nginx:1.19

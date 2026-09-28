@@ -1,0 +1,117 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: user-workload
+---
+### PRIMARY CLUSTER (kind-cluster-primary) ###
+# Original deployments in default namespace
+
+# Case: single container, same name
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: order-deployment
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: order
+  template:
+    metadata:
+      labels:
+        app: order
+    spec:
+      containers:
+      - name: order
+        image: nginx:1.27.0
+---
+# Case: single container, container name differs
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: user-service-deployment
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: user-service
+  template:
+    metadata:
+      labels:
+        app: user-service
+    spec:
+      containers:
+      - name: user-api
+        image: redis:7.4.0
+---
+# Case: multi-container
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: inventory-deployment
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: inventory
+  template:
+    metadata:
+      labels:
+        app: inventory
+    spec:
+      containers:
+      - name: inventory-web
+        image: httpd:2.4.60
+      - name: inventory-worker
+        image: busybox:1.36.1
+        command: ["sh", "-c", "sleep 3600"]
+---
+# Case 2: original has -backup in its own name (app-backup-deployment is the ORIGINAL)
+# backup version is app-backup-uq-deployment -> normalize -> app-uq-deployment (won't match)
+# Actually: app-backup-uq-deployment -> remove first -backup -> app-uq-deployment
+# So we need the original to be app-uq-deployment for this to work!
+# Let me re-think...
+# User said: app-backup-uq-deployment -> app-uq-deployment
+# So in primary, the ORIGINAL is app-uq-deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: app-uq-deployment
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: app-uq
+  template:
+    metadata:
+      labels:
+        app: app-uq
+    spec:
+      containers:
+      - name: app-uq
+        image: node:22-alpine
+        command: ["sh", "-c", "sleep 3600"]
+---
+# Case: cross-namespace (original in default, backup in user-workload)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: payment-deployment
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: payment
+  template:
+    metadata:
+      labels:
+        app: payment
+    spec:
+      containers:
+      - name: payment
+        image: postgres:16.4

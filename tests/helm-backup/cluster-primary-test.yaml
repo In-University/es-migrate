@@ -1,0 +1,116 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: order-deployment
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: order
+  template:
+    metadata:
+      labels:
+        app: order
+    spec:
+      containers:
+      - name: order
+        image: nginx:1.27.0
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: order-backup-deployment
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: order-backup
+  template:
+    metadata:
+      labels:
+        app: order-backup
+    spec:
+      containers:
+      - name: order
+        image: nginx:1.25.0
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: user-service-deployment
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: user-service
+  template:
+    metadata:
+      labels:
+        app: user-service
+    spec:
+      containers:
+      - name: user-api
+        image: redis:7.4.0
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: user-service-backup-deployment
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: user-service-backup
+  template:
+    metadata:
+      labels:
+        app: user-service-backup
+    spec:
+      containers:
+      - name: user-api-backup
+        image: redis:7.0.0
+---
+# Case 2: Original deployment is app-backup-deployment, backup is app-backup-uq-deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: app-backup-deployment
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: app-backup-orig
+  template:
+    metadata:
+      labels:
+        app: app-backup-orig
+    spec:
+      containers:
+      - name: app-backup
+        image: node:22-alpine
+        command: ["sh", "-c", "sleep 3600"]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: app-backup-uq-deployment
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: app-backup-uq
+  template:
+    metadata:
+      labels:
+        app: app-backup-uq
+    spec:
+      containers:
+      - name: app-backup-uq
+        image: node:18-alpine
+        command: ["sh", "-c", "sleep 3600"]
