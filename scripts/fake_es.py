@@ -137,7 +137,15 @@ class H(BaseHTTPRequestHandler):
                 return self._send(404, {"error": {
                     "type": "search_context_missing_exception",
                     "reason": "No search context found"}})
-            return self._send(200, self._search(PITS[pit], body))
+            res = self._search(PITS[pit], body)
+            if FAULTS.get("rotate_pit"):
+                idx = PITS.pop(pit)
+                new_pid = "pit-rot-%d" % (len(PITS) + 1)
+                PITS[new_pid] = idx
+                res["pit_id"] = new_pid
+            else:
+                res["pit_id"] = pit
+            return self._send(200, res)
 
         m = re.match(r"^/([^/]+)/_search$", p)
         if m:

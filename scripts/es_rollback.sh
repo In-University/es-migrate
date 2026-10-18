@@ -492,7 +492,16 @@ bulk_send() {
     attempt=$((attempt + 1))
     if [ "$attempt" -ge "$MAX_RETRY" ]; then
       warn "$retry item(s) still rejected after $MAX_RETRY attempts -- dead-lettering"
-      cat "$retry_file" >>"$DEADLETTER"
+      awk -v dl="$DEADLETTER" '
+        { a = $0
+          if (a ~ /^[[:space:]]*\{"delete"/) {
+            id = a; gsub(/.*"_id"[[:space:]]*:[[:space:]]*"/, "", id); gsub(/".*/, "", id)
+            printf "{\"_id\":\"%s\",\"status\":429,\"error\":{\"type\":\"retries_exhausted\",\"reason\":\"max retries exceeded\"},\"action\":%s,\"source\":null}\n", id, a >> dl
+          } else {
+            if ((getline b) <= 0) b = "null"
+            id = a; gsub(/.*"_id"[[:space:]]*:[[:space:]]*"/, "", id); gsub(/".*/, "", id)
+            printf "{\"_id\":\"%s\",\"status\":429,\"error\":{\"type\":\"retries_exhausted\",\"reason\":\"max retries exceeded\"},\"action\":%s,\"source\":%s}\n", id, a, (b == "" ? "null" : b) >> dl
+          } }' "$retry_file"
       BULK_DEADLETTERED=$((BULK_DEADLETTERED + retry))
       return 0
     fi
@@ -590,8 +599,9 @@ phase_preflight() {
   # application -- different clocks. Rewinding the lower bound costs a few
   # redundant whole-document overwrites against a frozen source, and removes
   # the skew direction that would otherwise drop documents silently.
-  local effective
-  effective="$(jq -rn --arg t "$cutover" --argjson m "$SAFETY_MARGIN" '
+  local clean_cutover effective
+  clean_cutover="$(echo "$cutover" | sed -E 's/\.[0-9]+//; s/([+-][0-9]{2}):?[0-9]{2}$/Z/')"
+  effective="$(jq -rn --arg t "$clean_cutover" --argjson m "$SAFETY_MARGIN" '
       ($t | fromdateiso8601) as $e
       | if $e > now then error("future") else ($e - $m | todateiso8601) end
     ' 2>/dev/null)" \
@@ -689,6 +699,13 @@ phase_delta() {
     fi
     dbg_add DBG_SEARCH "$_dbg"
 
+    local new_pit
+    new_pit="$(jq -r '.pit_id // empty' "$RESP")"
+    if [ -n "$new_pit" ] && [ "$new_pit" != "$pit" ]; then
+      pit="$new_pit"
+      printf '%s' "$pit" >"$PIT_FILE"
+    fi
+
     if [ "$seen" -eq 0 ] && [ ! -s "$CURSOR_FILE" ]; then
       state_set TOTAL_HITS "$(jq -r '.hits.total.value // .hits.total' "$RESP")"
       log "   delta window contains $TOTAL_HITS doc(s)"
@@ -736,6 +753,9 @@ phase_gate() {
   log "== phase 2: delta gate =="
   state_load
   local total="${TOTAL_HITS:-0}" seen="${SEEN:-0}" deadletters="${DL_COUNT:-0}"
+  local dl_file_count=0
+  [ -s "$DEADLETTER" ] && dl_file_count="$(wc -l <"$DEADLETTER" | tr -d ' ')"
+  [ "$dl_file_count" -gt "$deadletters" ] && deadletters="$dl_file_count"
 
   # seen can exceed total after a PIT expiry forced a watermark restart --
   # that overlap is re-read, not new work. It must never fall short.
@@ -827,6 +847,10 @@ walk_pit_slice() {
       return 1
     }
     dbg_add DBG_EXP_HTTP "$_d"
+
+    local new_pit
+    new_pit="$(jq -r '.pit_id // empty' "$RESP")"
+    [ -n "$new_pit" ] && pit="$new_pit"
 
     _d="$(dbg_t0)"; n="$(jq '.hits.hits | length' "$RESP")"; dbg_add DBG_EXP_COUNT "$_d"
     [ "$n" -eq 0 ] && break
@@ -996,14 +1020,14 @@ this really is what happened on ES9."
   fi
 
   es6 POST "$ES6_URL/$DST_INDEX/_refresh" >/dev/null || warn "refresh failed"
-  state_set DELETED "$delete_count"; state_set REPAIRED "$repair_count"
+  state_set DELETED "$delete_count"; state_set REPAIRED "${RECONCILE_REPAIRED_APPLIED:-$repair_count}"
   state_set PHASE RECONCILE_DONE
   dbg_phase_end "phase 3"
-  log "   reconcile done: deleted=$delete_count repaired=$repair_count"
+  log "   reconcile done: deleted=$delete_count repaired=${RECONCILE_REPAIRED_APPLIED:-$repair_count}"
 }
 
 reconcile_deletes() {
-  local idfile="$1" total="$2" applied=0 part
+  local idfile="$1" total="$2" applied=0 deadlettered=0 part
   log "   deleting $total doc(s) from ES6 (journaling pre-images first)"
   rm -f "$PARTS"/delete.*
   split -l "$MGET_BATCH" -a 5 "$idfile" "$PARTS/delete."
@@ -1016,35 +1040,56 @@ reconcile_deletes() {
     id_list_body "$part" "$WORK/delete.bulk.ndjson" delete
     bulk_send "$WORK/delete.bulk.ndjson" || die "bulk delete failed after $applied"
     applied=$((applied + BULK_APPLIED))
+    deadlettered=$((deadlettered + BULK_DEADLETTERED))
   done
   rm -f "$PARTS"/delete.*
-  log "   deleted $applied doc(s)"
+  if [ "$deadlettered" -gt 0 ]; then
+    state_load
+    local dl="${DL_COUNT:-0}"
+    state_set DL_COUNT "$((dl + deadlettered))"
+  fi
+  log "   deleted $applied doc(s) (deadletter=$deadlettered)"
 }
 
 reconcile_repairs() {
-  local idfile="$1" applied=0 part seq n
+  local idfile="$1" applied=0 deadlettered=0 part seq req_count found_count
   rm -f "$PARTS"/repair.*
   split -l "$MGET_BATCH" -a 5 "$idfile" "$PARTS/repair."
   for part in "$PARTS"/repair.*; do
     [ -s "$part" ] || continue
     [ "$INTERRUPTED" -eq 1 ] && exit 130
+    req_count="$(wc -l <"$part" | tr -d ' ')"
     id_list_body "$part" "$WORK/repair.mget.json" mget
     es9 POST "$ES9_URL/$SRC_INDEX/_mget" application/json "$WORK/repair.mget.json" >/dev/null \
       || die "repair _mget from ES9 failed"
+    found_count="$(jq '[.docs[] | select(.found)] | length' "$RESP")"
+    if [ "$found_count" -lt "$req_count" ]; then
+      warn "$((req_count - found_count))/$req_count doc(s) in repair batch missing on ES9"
+    fi
     # Routing travels with the document, same reason as in split_delta_page.
     jq -c '.docs[] | select(.found)
            | ({index: ({_id: ._id} + (if ._routing then {routing: ._routing} else {} end))}),
              ._source' "$RESP" >"$WORK/repair.bulk.ndjson"
     # These ids are absent from ES6 by construction, so the pre-image is
-    # "absent" -- journal it directly, no _mget needed. Undo deletes them.
-    state_load; seq="${JOURNAL_SEQ:-0}"; n="$(wc -l <"$part" | tr -d ' ')"
-    awk -v s="$seq" '{printf "%d\t%s\trepair\t0\t{}\n", s + NR, $0}' "$part" | gzip -1 >>"$JOURNAL"
-    state_set JOURNAL_SEQ "$((seq + n))"
+    # "absent" -- journal it directly for found docs, no _mget needed. Undo deletes them.
+    state_load; seq="${JOURNAL_SEQ:-0}"
+    jq -r --argjson seq "$seq" '
+      [.docs[] | select(.found)] | to_entries[]
+      | "\($seq + .key + 1)\t\(.value._id)\trepair\t0\t{}"
+    ' "$RESP" | gzip -1 >>"$JOURNAL"
+    state_set JOURNAL_SEQ "$((seq + found_count))"
     bulk_send "$WORK/repair.bulk.ndjson" || die "repair bulk failed after $applied"
     applied=$((applied + BULK_APPLIED))
+    deadlettered=$((deadlettered + BULK_DEADLETTERED))
   done
   rm -f "$PARTS"/repair.*
-  log "   repaired $applied doc(s)"
+  if [ "$deadlettered" -gt 0 ]; then
+    state_load
+    local dl="${DL_COUNT:-0}"
+    state_set DL_COUNT "$((dl + deadlettered))"
+  fi
+  RECONCILE_REPAIRED_APPLIED="$applied"
+  log "   repaired $applied doc(s) (deadletter=$deadlettered)"
 }
 
 # ------------------------------------------------------------------ phase 4 --
@@ -1063,20 +1108,21 @@ phase_verify() {
   log "   counts: $SRC_INDEX=$src_count $DST_INDEX=$dst_count"
   [ "$src_count" = "$dst_count" ] || { warn "count mismatch: $src_count vs $dst_count"; rc=1; }
 
-  # The expected post-reconcile ES6 id set is (es6 - to_delete) + to_repair,
-  # and all three files are already on disk, so checking it is free.
-  if [ -s "$STATE_DIR/es9_ids.sorted" ] && [ -s "$STATE_DIR/es6_ids.sorted" ]; then
-    comm -23 "$STATE_DIR/es6_ids.sorted" "$STATE_DIR/to_delete" \
-      | sort -u -T "$WORK" -o "$WORK/verify.expected.ids" - "$STATE_DIR/to_repair"
-    if cmp -s "$WORK/verify.expected.ids" "$STATE_DIR/es9_ids.sorted"; then
-      log "   expected ES6 id set matches ES9 exactly"
+  # Check live ID sets between ES6 and ES9 directly by exporting ES6 live IDs
+  if [ -s "$STATE_DIR/es9_ids.sorted" ]; then
+    log "   exporting live ids from ES6 for post-reconcile verification"
+    export_ids dst "$WORK/verify.dst.sorted"
+    comm -23 "$WORK/verify.dst.sorted" "$STATE_DIR/es9_ids.sorted" >"$STATE_DIR/verify_extra"
+    comm -13 "$WORK/verify.dst.sorted" "$STATE_DIR/es9_ids.sorted" >"$STATE_DIR/verify_missing"
+    local extra missing
+    extra="$(wc -l <"$STATE_DIR/verify_extra" | tr -d ' ')"
+    missing="$(wc -l <"$STATE_DIR/verify_missing" | tr -d ' ')"
+    if [ "$extra" -eq 0 ] && [ "$missing" -eq 0 ]; then
+      log "   ES6 id set matches ES9 exactly"
     else
-      warn "expected id set differs from ES9 -- re-exporting ES6 ids to locate it"
-      export_ids dst "$WORK/verify.dst.sorted"
-      comm -23 "$WORK/verify.dst.sorted" "$STATE_DIR/es9_ids.sorted" >"$STATE_DIR/verify_extra"
-      comm -13 "$WORK/verify.dst.sorted" "$STATE_DIR/es9_ids.sorted" >"$STATE_DIR/verify_missing"
-      warn "extra on ES6:   $(wc -l <"$STATE_DIR/verify_extra" | tr -d ' ') -> $STATE_DIR/verify_extra"
-      warn "missing on ES6: $(wc -l <"$STATE_DIR/verify_missing" | tr -d ' ') -> $STATE_DIR/verify_missing"
+      warn "ES6 id set differs from ES9:"
+      [ "$extra" -gt 0 ] && warn "   extra on ES6:   $extra -> $STATE_DIR/verify_extra"
+      [ "$missing" -gt 0 ] && warn "   missing on ES6: $missing -> $STATE_DIR/verify_missing"
       rc=1
     fi
   fi
@@ -1104,9 +1150,9 @@ phase_verify() {
         || die "sample _mget on ES6 failed"
       # jq compares objects structurally, so key order never matters here.
       jq -rn --slurpfile a "$WORK/verify.sample.src.json" --slurpfile b "$RESP" '
-          ($a[0].docs | map({key: ._id, value: (if .found then ._source else null end)}) | from_entries) as $A
-        | ($b[0].docs | map({key: ._id, value: (if .found then ._source else null end)}) | from_entries) as $B
-        | $A | keys[] | select($A[.] != $B[.])
+          ($a[0].docs | map({key: ._id, value: (if .found then ._source else "__NOT_FOUND__" end)}) | from_entries) as $A
+        | ($b[0].docs | map({key: ._id, value: (if .found then ._source else "__NOT_FOUND__" end)}) | from_entries) as $B
+        | $A | keys[] | select($A[.] != $B[.] or $A[.] == "__NOT_FOUND__")
       ' >"$STATE_DIR/verify_sample_diff"
       local differing sampled
       differing="$(wc -l <"$STATE_DIR/verify_sample_diff" | tr -d ' ')"
@@ -1169,15 +1215,20 @@ pipeline() {
   case "${PHASE:-DELTA_SYNC}" in
     DELTA_SYNC)     phase_delta; phase_gate; phase_reconcile ;;
     DELTA_DONE)     phase_gate; phase_reconcile ;;
-    GATE_PASSED)    phase_reconcile ;;
+    GATE_PASSED)    phase_gate; phase_reconcile ;;
     RECONCILE_DONE) ;;
     *) die "unknown phase: $PHASE" ;;
   esac
   local rc=0
   phase_verify || rc=$?
   state_load
-  if [ "${DL_COUNT:-0}" -gt 0 ]; then
-    warn "finished with ${DL_COUNT} dead-lettered doc(s) in $DEADLETTER"
+  local total_dl="${DL_COUNT:-0}"
+  if [ -s "$DEADLETTER" ]; then
+    local dl_lines; dl_lines="$(wc -l <"$DEADLETTER" | tr -d ' ')"
+    [ "$dl_lines" -gt "$total_dl" ] && total_dl="$dl_lines"
+  fi
+  if [ "$total_dl" -gt 0 ]; then
+    warn "finished with ${total_dl} dead-lettered doc(s) in $DEADLETTER"
     exit 2
   fi
   exit "$rc"

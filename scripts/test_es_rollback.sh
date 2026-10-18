@@ -229,5 +229,56 @@ eq "second process refuses to start" "1" "$RC"
 eq "it names the holder" "yes" "$(grep -q 'another es_rollback is running' l.txt && echo yes || echo no)"
 
 echo
+echo "== PIT ID rotation on each search page is handled seamlessly =="
+fresh; fault '{"rotate_pit":true}'
+go .pit run >pit.txt 2>&1; RC=$?
+eq "run succeeds with rotating PIT IDs" "0" "$RC"
+eq "counts converge with rotating PIT" "$(cnt bench-es9)" "$(cnt bench-es6)"
+eq "verify passed with rotating PIT" "yes" "$(grep -q 'VERIFY PASSED' pit.txt && echo yes || echo no)"
+
+echo
+echo "== verify catches true ID divergence on ES6 =="
+fresh
+go .v run >v.txt 2>&1; RC=$?
+eq "initial run succeeds" "0" "$RC"
+printf '{"delete":{"_id":"doc-01"}}\n{"index":{"_id":"doc-extra"}}\n{"id":"doc-extra","title":"extra"}\n' \
+  | curl -s -u e:e -XPOST "$BASE/bench-es6/_doc/_bulk" -H 'Content-Type: application/x-ndjson' --data-binary @- >/dev/null
+STATE_DIR=.v "${RB[@]}" verify >v2.txt 2>&1; RC=$?
+eq "verify fails when ES6 ID set diverged" "1" "$RC"
+eq "verify detects missing on ES6" "yes" "$(grep -q 'missing on ES6: 1' v2.txt && echo yes || echo no)"
+eq "verify detects extra on ES6" "yes" "$(grep -q 'extra on ES6:   1' v2.txt && echo yes || echo no)"
+
+echo
+echo "== resume halts at gate when dead letters exist unless ALLOW_PARTIAL=true =="
+fresh; fault '{"bulk_fatal_id":"doc-03"}'
+go .dl run >dl.txt 2>&1; RC=$?
+eq "initial run stops at gate with dead letters" "1" "$RC"
+fault '{}'
+STATE_DIR=.dl "${RB[@]}" resume >dl2.txt 2>&1; RC=$?
+eq "resume without ALLOW_PARTIAL still blocked by gate" "1" "$RC"
+eq "gate reports deadletter presence" "yes" "$(grep -q 'gate FAILED: 1 doc(s) in' dl2.txt && echo yes || echo no)"
+ALLOW_PARTIAL=true STATE_DIR=.dl "${RB[@]}" resume >dl3.txt 2>&1; RC=$?
+eq "resume with ALLOW_PARTIAL=true exits 2 (finished with dead letters)" "2" "$RC"
+eq "warning logged about finished with dead letters" "yes" "$(grep -q 'finished with 1 dead-lettered' dl3.txt && echo yes || echo no)"
+
+echo
+echo "== deadletter entries for exhausted retries are valid structured JSON =="
+fresh; fault '{"bulk_429_every":1}'
+rm -rf .dl_retry
+MAX_RETRY=2 STATE_DIR=.dl_retry "${RB[@]}" run >dlr.txt 2>&1 || true
+eq "deadletter has valid _id extracted" "doc-01" "$(jq -r '._id' <.dl_retry/deadletter.ndjson | head -1)"
+eq "deadletter status is 429" "429" "$(jq -r '.status' <.dl_retry/deadletter.ndjson | head -1)"
+eq "deadletter error type is retries_exhausted" "retries_exhausted" "$(jq -r '.error.type' <.dl_retry/deadletter.ndjson | head -1)"
+
+echo
+echo "== SINCE override with ISO-8601 fractional seconds =="
+fresh
+rm -rf .since
+SINCE="2026-07-10T00:00:00.000Z" STATE_DIR=.since "${RB[@]}" preflight >since.txt 2>&1; RC=$?
+eq "preflight accepts fractional seconds in SINCE" "0" "$RC"
+eq "preflight computed effective bound" "yes" "$(grep -q 'effective lower bound' since.txt && echo yes || echo no)"
+
+echo
 printf 'passed %d, failed %d\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]
+
