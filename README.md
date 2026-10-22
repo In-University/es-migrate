@@ -357,3 +357,12 @@ export ES9_URL=http://10.146.0.11:9200
 export ELASTIC_PW='elastic'
 export REMOVE_FIELDS=modified_at
 ./es_rollback_py.sh run
+
+## Official Elasticsearch Documentation Archive (6.8 → 9.2.3)
+
+All raw, unedited official documentation, release notes, breaking changes, migration guides, plugin changelogs, and mapping evolution references covering versions 6.8 through 9.2.3 are stored in [`docs/versions/`](docs/versions/README.md).
+
+Key Reference Documents:
+- [`docs/versions/INGEST_ATTACHMENT_SCHEMA_EVOLUTION.md`](docs/versions/INGEST_ATTACHMENT_SCHEMA_EVOLUTION.md): Complete verbatim property catalog (all 28 metadata fields extracted in 8+/9+ vs 8 fields in 6/7) and strict dynamic mapping failure prevention.
+- [`docs/versions/DYNAMIC_MAPPING_AND_STRICT_GUIDE.md`](docs/versions/DYNAMIC_MAPPING_AND_STRICT_GUIDE.md): Schema rules, removal of types, strict mapping, and date format migration guide.
+- [`docs/MAPPING-DIFFERENCES.md`](docs/MAPPING-DIFFERENCES.md): Summary of ES6 vs ES9 mapping differences.

@@ -61,7 +61,17 @@ field, and never written to ES6:
 |---|---|
 | `_meta.cutover_at` | ISO-8601 timestamp written by `scripts/reindex_remote.sh` right after a successful ES6 → ES9 reindex. The rollback delta sync reads it via `GET bench-es9/_mapping` as the lower bound for `updated_at`. |
 
-## 4. What's identical
+## 5. Ingest Attachment Plugin / Module Metadata Fields & Strict Mapping
+
+When migrating pipelines and indices that use the attachment processor (from ES6's `ingest-attachment` plugin to ES9's built-in `ingest-attachment` module):
+- **ES6**: Extracts 8 properties (`content`, `title`, `author`, `keywords`, `date`, `content_type`, `content_length`, `language`).
+- **ES9**: Extracts 28 properties by default (adds 20 new Apache Tika metadata fields including `modified`, `format`, `identifier`, `contributor`, `coverage`, `modifier`, `creator_tool`, `publisher`, `relation`, `rights`, `source`, `type`, `description`, `print_date`, `metadata_date`, `latitude`, `longitude`, `altitude`, `rating`, `comments`).
+
+**Failure Warning**: On indices with `"dynamic": "strict"`, indexing will fail with `strict_dynamic_mapping_exception` when an attachment document contains any of the new metadata fields unless the index mapping explicitly declares them or the pipeline restricts extraction via `"properties": ["content", ...]`.
+
+See [INGEST_ATTACHMENT_SCHEMA_EVOLUTION.md](versions/INGEST_ATTACHMENT_SCHEMA_EVOLUTION.md) for the complete verbatim property table, Java source definitions, and copy-paste mapping templates.
+
+## 6. What's identical
 
 Every other field — `id`, `sku`, `title`, `description`, `category`,
 `sub_category`, `brand`, `status`, `country_code`, `currency`, `tags`,
