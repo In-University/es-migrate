@@ -1,0 +1,35 @@
+**IMPORTANT**: This documentation is no longer updated. Refer to [Elastic's version policy](https://www.elastic.co/support/eol) and the [latest documentation](https://www.elastic.co/docs).
+
+## Elasticsearch version 8.17.5
+
+Also see [Breaking changes in 8.17](migrating-8.17.html#breaking-changes-8.17).
+
+### Bug fixes
+
+Authentication
+
+* Fix NPE for missing Content Type header in OIDC Authenticator [#126191](https://github.com/elastic/elasticsearch/pull/126191)
+
+ES|QL
+
+* Fix `ReplaceMissingFieldsWithNull` [#125764](https://github.com/elastic/elasticsearch/pull/125764) (issues: [#126036](https://github.com/elastic/elasticsearch/issues/126036), [#121754](https://github.com/elastic/elasticsearch/issues/121754), [#126030](https://github.com/elastic/elasticsearch/issues/126030))
+
+* Fix usage of already released null block in `ValueSourceReaderOperator` [#126411](https://github.com/elastic/elasticsearch/pull/126411) (issue: [#125850](https://github.com/elastic/elasticsearch/issues/125850))
+
+Machine Learning
+
+* Fixing bedrock event executor terminated cache issue [#118177](https://github.com/elastic/elasticsearch/pull/118177) (issue: [#117916](https://github.com/elastic/elasticsearch/issues/117916))
+
+Search
+
+* Re-enable parallel collection for field sorted top hits [#125916](https://github.com/elastic/elasticsearch/pull/125916)
+
+* Support indices created in ESv6 and updated in ESV7 using different LuceneCodecs as archive in current version. [#125389](https://github.com/elastic/elasticsearch/pull/125389)
+
+TLS
+
+* Set `keyUsage` for generated HTTP certificates and self-signed CA [#126376](https://github.com/elastic/elasticsearch/pull/126376) (issue: [#117769](https://github.com/elastic/elasticsearch/issues/117769))
+
+Vector Search
+
+* Revert enabling madvise by default to fix vector search performance degradation on Linux with MGLRU enabled [#126308](https://github.com/elastic/elasticsearch/pull/126308) (issue: [#124499](https://github.com/elastic/elasticsearch/issues/124499))

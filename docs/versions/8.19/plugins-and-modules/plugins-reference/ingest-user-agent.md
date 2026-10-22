@@ -1,0 +1,5 @@
+### Ingest `user_agent` Processor Plugin
+
+The `user_agent` processor is no longer distributed as a plugin, but is now a module
+distributed by default with Elasticsearch. See the
+{ref}/user-agent-processor.html[User Agent processor] for more details.

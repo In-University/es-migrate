@@ -1,0 +1,209 @@
+**IMPORTANT**: This documentation is no longer updated. Refer to [Elastic's version policy](https://www.elastic.co/support/eol) and the [latest documentation](https://www.elastic.co/docs).
+
+## Elasticsearch version 7.17.0
+
+Also see [Breaking changes in 7.17](migrating-7.17.html#breaking-changes-7.17).
+
+### Known issues
+
+* Elasticsearch fails to parse system index migration data from the cluster
+state (issue: [#84115](https://github.com/elastic/elasticsearch/issues/84115))
+
+* Feature migration refuses to run if all features requiring upgrade have
+encountered errors (issue: [#83917](https://github.com/elastic/elasticsearch/issues/83917))
+
+* Migrating system indices fails for tasks with `mapper_parsing_exception`
+(issue: [#83779](https://github.com/elastic/elasticsearch/issues/83779))
+
+These issues will impact any subsequent upgrade to 8.x, and are fixed in
+7.17.1. We strongly recommend that all users upgrade to a later patch
+release of 7.17 before upgrading to 8.x.
+
+* Parsing a request when the last element in an array is filtered out
+(for instance using `_source_includes`) fails. This
+is due to [a bug in Jackson parser](https://github.com/FasterXML/jackson-core/issues/882).
+Fixed in Elasticsearch 8.6.1 ([#91456](https://github.com/elastic/elasticsearch/pull/92480))
+
+* The deprecated `index.mapper.dynamic` setting can break your cluster. It can only
+be set using the **Update index settings API**. Symptoms include nodes failing to start
+or shards failing to allocate. Do not use this setting in versions prior to 7.17.22.
+The bug is fixed in 7.17.22.
+(issue: [#109160](https://github.com/elastic/elasticsearch/issues/109160))
+
+### Deprecations
+
+Mapping
+
+* Remove `too_many_fields` upgrade check [#82809](https://github.com/elastic/elasticsearch/pull/82809) (issues: [#81539](https://github.com/elastic/elasticsearch/issues/81539), [#81850](https://github.com/elastic/elasticsearch/issues/81850))
+
+Transform
+
+* Improve transform deprecation messages [#81853](https://github.com/elastic/elasticsearch/pull/81853) (issues: [#81521](https://github.com/elastic/elasticsearch/issues/81521), [#81523](https://github.com/elastic/elasticsearch/issues/81523))
+
+### Enhancements
+
+Audit
+
+* Emit `trace.id` into audit logs [#82849](https://github.com/elastic/elasticsearch/pull/82849) (issue: [#74210](https://github.com/elastic/elasticsearch/issues/74210))
+
+Authorization
+
+* Allow read template with cluster monitor privilege [#82046](https://github.com/elastic/elasticsearch/pull/82046) (issue: [#78832](https://github.com/elastic/elasticsearch/issues/78832))
+
+* Make authorization performance log message configurable and disabled by default [#82648](https://github.com/elastic/elasticsearch/pull/82648) (issue: [#75439](https://github.com/elastic/elasticsearch/issues/75439))
+
+* Add Kibana system permissions for Endpoint action indices [#81953](https://github.com/elastic/elasticsearch/pull/81953)
+
+ILM+SLM
+
+* Add an index→step cache to the `PolicyStepsRegistry` [#82316](https://github.com/elastic/elasticsearch/pull/82316) (issue: [#77466](https://github.com/elastic/elasticsearch/issues/77466))
+
+* Migrate legacy/v2/component templates away from custom attributes routing [#82472](https://github.com/elastic/elasticsearch/pull/82472) (issue: [#82170](https://github.com/elastic/elasticsearch/issues/82170))
+
+* Migrate to data tiers API dry run on any ILM status [#82226](https://github.com/elastic/elasticsearch/pull/82226) (issue: [#82169](https://github.com/elastic/elasticsearch/issues/82169))
+
+Infra/Core
+
+* Allow scaling executors to reject tasks after shutdown [#81856](https://github.com/elastic/elasticsearch/pull/81856) (issues: [#77017](https://github.com/elastic/elasticsearch/issues/77017), [#77178](https://github.com/elastic/elasticsearch/issues/77178))
+
+* Prevent direct upgrade of indices from 6.8 to 8.0 [#82689](https://github.com/elastic/elasticsearch/pull/82689) (issue: [#81326](https://github.com/elastic/elasticsearch/issues/81326))
+
+Infra/Logging
+
+* Adjust ILM policy for deprecation logs [#82833](https://github.com/elastic/elasticsearch/pull/82833)
+
+* Do no use `x-opaque-id` for deduplicating Elastic originating requests [#82855](https://github.com/elastic/elasticsearch/pull/82855) (issue: [#82810](https://github.com/elastic/elasticsearch/issues/82810))
+
+Infra/Settings
+
+* Implement setting deduplication via string interning [#80493](https://github.com/elastic/elasticsearch/pull/80493) (issues: [#77466](https://github.com/elastic/elasticsearch/issues/77466), [#78892](https://github.com/elastic/elasticsearch/issues/78892))
+
+Java Low Level REST Client
+
+* Expose HTTP client and allow overriding meta header [#81955](https://github.com/elastic/elasticsearch/pull/81955)
+
+License
+
+* Add `DEBUG` log when document level security and field level security usage is detected [#82182](https://github.com/elastic/elasticsearch/pull/82182) (issue: [#79152](https://github.com/elastic/elasticsearch/issues/79152))
+
+Machine Learning
+
+* Move datafeed stats action off of master node [#82271](https://github.com/elastic/elasticsearch/pull/82271)
+
+Watcher
+
+* Prevent watcher from starting if its templates are missing [#82395](https://github.com/elastic/elasticsearch/pull/82395)
+
+### Bug fixes
+
+Aggregations
+
+* Fix bucket keys format for range aggregations on float field [#81801](https://github.com/elastic/elasticsearch/pull/81801) (issue: [#81749](https://github.com/elastic/elasticsearch/issues/81749))
+
+* Fix cardinality aggregation in asynchronous search [#82108](https://github.com/elastic/elasticsearch/pull/82108)
+
+* Fix missing fields in range aggregation response for date fields [#82732](https://github.com/elastic/elasticsearch/pull/82732) (issue: [#82688](https://github.com/elastic/elasticsearch/issues/82688))
+
+Allocation
+
+* Correct context for batched reroute notifications [#83019](https://github.com/elastic/elasticsearch/pull/83019)
+
+Authorization
+
+* Fix field level security for frozen tier [#82521](https://github.com/elastic/elasticsearch/pull/82521) (issues: [#78988](https://github.com/elastic/elasticsearch/issues/78988), [#82044](https://github.com/elastic/elasticsearch/issues/82044))
+
+CRUD
+
+* Fix potential listener leak in `TransportBulkAction` [#81894](https://github.com/elastic/elasticsearch/pull/81894)
+
+Geo
+
+* Handle degenerated rectangles in vector tiles [#82404](https://github.com/elastic/elasticsearch/pull/82404) (issue: [#81891](https://github.com/elastic/elasticsearch/issues/81891))
+
+* `GeoPolygonDecomposer` might fail due to numerical errors when calculating intersection with the dateline [#82953](https://github.com/elastic/elasticsearch/pull/82953) (issue: [#82840](https://github.com/elastic/elasticsearch/issues/82840))
+
+ILM+SLM
+
+* Migrate the coldest node attribute for data tier routing [#81940](https://github.com/elastic/elasticsearch/pull/81940) (issue: [#81633](https://github.com/elastic/elasticsearch/issues/81633))
+
+* Retry ILM step to safely refresh the cached phase [#82613](https://github.com/elastic/elasticsearch/pull/82613) (issue: [#81921](https://github.com/elastic/elasticsearch/issues/81921))
+
+* Fix ILM allocate action to allow only `total_shards_per_node` [#81944](https://github.com/elastic/elasticsearch/pull/81944) (issue: [#81943](https://github.com/elastic/elasticsearch/issues/81943))
+
+Indices APIs
+
+* Make the rollover API respect the request’s `master_timeout` [#82326](https://github.com/elastic/elasticsearch/pull/82326) (issue: [#81762](https://github.com/elastic/elasticsearch/issues/81762))
+
+Infra/Core
+
+* Allow clearing blocks on managed system indices [#82507](https://github.com/elastic/elasticsearch/pull/82507) (issue: [#80814](https://github.com/elastic/elasticsearch/issues/80814))
+
+Infra/Logging
+
+* Add `doPrivileged` section in deprecation logger [#81819](https://github.com/elastic/elasticsearch/pull/81819) (issue: [#81708](https://github.com/elastic/elasticsearch/issues/81708))
+
+* Always emit product origin to deprecation log if present [#83115](https://github.com/elastic/elasticsearch/pull/83115)
+
+Ingest
+
+* Filter enrich policy index deletes to just the policy’s associated indices [#82568](https://github.com/elastic/elasticsearch/pull/82568)
+
+* Fix enrich cache corruption bug [#82441](https://github.com/elastic/elasticsearch/pull/82441) (issue: [#82340](https://github.com/elastic/elasticsearch/issues/82340))
+
+Java Low Level REST Client
+
+* Fix version resolution and encoding in LLRC [#81989](https://github.com/elastic/elasticsearch/pull/81989)
+
+Machine Learning
+
+* Fix annotations index maintenance after reindexing [#82304](https://github.com/elastic/elasticsearch/pull/82304) (issue: [#82250](https://github.com/elastic/elasticsearch/issues/82250))
+
+* Improve cleanup for model snapshot upgrades [#81831](https://github.com/elastic/elasticsearch/pull/81831) (issue: [#81578](https://github.com/elastic/elasticsearch/issues/81578))
+
+* Make delete intervening results more selective [#82437](https://github.com/elastic/elasticsearch/pull/82437)
+
+* Skip time to next interval with data for datafeeds with aggs [#82488](https://github.com/elastic/elasticsearch/pull/82488) (issue: [#82406](https://github.com/elastic/elasticsearch/issues/82406))
+
+* Update running process when global calendar changes [#83044](https://github.com/elastic/elasticsearch/pull/83044)
+
+* Avoid transient poor time series modeling after detecting new seasonal components. This can affect cases where there are fast and slow repeats in the data, for example 30 minutes and 1 day, and the job uses a short bucket length. [#2167](https://github.com/elastic/ml-cpp/pull/2167) (issue: [#2166](https://github.com/elastic/ml-cpp/issues/2166))
+
+Monitoring
+
+* Always attempt upgrade monitoring templates [#82713](https://github.com/elastic/elasticsearch/pull/82713) (issue: [#82453](https://github.com/elastic/elasticsearch/issues/82453))
+
+Network
+
+* Correct context for `ClusterConnManager` listener [#83035](https://github.com/elastic/elasticsearch/pull/83035)
+
+Search
+
+* Fix bug where field is not returned if it has the same prefix as a nested field [#82922](https://github.com/elastic/elasticsearch/pull/82922) (issue: [#82905](https://github.com/elastic/elasticsearch/issues/82905))
+
+Settings
+
+* Change `deprecation.skip_deprecated_settings` to work with dynamic settings [#81836](https://github.com/elastic/elasticsearch/pull/81836)
+
+* Check both node and cluster settings in `NodeDeprecationChecks` [#82487](https://github.com/elastic/elasticsearch/pull/82487) (issue: [#82484](https://github.com/elastic/elasticsearch/issues/82484))
+
+* Ignore dynamic settings specified by `deprecation.skip_deprecated_settings` in node deprecation checks [#82883](https://github.com/elastic/elasticsearch/pull/82883) (issue: [#82889](https://github.com/elastic/elasticsearch/issues/82889))
+
+Snapshot/Restore
+
+* Always fail snapshot deletion listeners on master failover [#82361](https://github.com/elastic/elasticsearch/pull/82361) (issue: [#81596](https://github.com/elastic/elasticsearch/issues/81596))
+
+* Fix potential repository corruption during master failover [#82912](https://github.com/elastic/elasticsearch/pull/82912) (issue: [#82911](https://github.com/elastic/elasticsearch/issues/82911))
+
+* Remove requirement for key setting on Azure client settings [#82030](https://github.com/elastic/elasticsearch/pull/82030)
+
+* Support GKE workload identity for searchable snapshots [#82974](https://github.com/elastic/elasticsearch/pull/82974) (issue: [#82702](https://github.com/elastic/elasticsearch/issues/82702))
+
+Stats
+
+* Correct context for `CancellableSOCache` listener [#83021](https://github.com/elastic/elasticsearch/pull/83021)
+
+### Upgrades
+
+Search
+
+* Upgrade to Lucene 8.11.1 [#81900](https://github.com/elastic/elasticsearch/pull/81900)

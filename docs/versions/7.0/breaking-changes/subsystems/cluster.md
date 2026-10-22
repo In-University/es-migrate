@@ -1,0 +1,28 @@
+### Cluster changes
+
+//NOTE: The notable-breaking-changes tagged regions are re-used in the
+//Installation and Upgrade Guide
+
+//tag::notable-breaking-changes[]
+
+// end::notable-breaking-changes[]
+
+#### `:` is no longer allowed in cluster name
+
+Due to cross-cluster search using `:` to separate a cluster and index name,
+cluster names may no longer contain `:`.
+
+#### New default for `wait_for_active_shards` parameter of the open index command
+
+The default value for the `wait_for_active_shards` parameter of the open index API
+is changed from 0 to 1, which means that the command will now by default wait for all
+primary shards of the opened index to be allocated.
+
+#### Shard preferences `_primary`, `_primary_first`, `_replica`, and `_replica_first` are removed
+These shard preferences are removed in favour of the `_prefer_nodes` and `_only_nodes` preferences.
+
+#### Cluster-wide shard soft limit
+Clusters now have soft limits on the total number of open shards in the cluster
+based on the number of nodes and the `cluster.max_shards_per_node` cluster
+setting, to prevent accidental operations that would destabilize the cluster.
+More information can be found in the [documentation for that setting](#misc-cluster).

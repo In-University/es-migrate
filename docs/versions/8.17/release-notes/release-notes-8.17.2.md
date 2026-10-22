@@ -1,0 +1,71 @@
+**IMPORTANT**: This documentation is no longer updated. Refer to [Elastic's version policy](https://www.elastic.co/support/eol) and the [latest documentation](https://www.elastic.co/docs).
+
+## Elasticsearch version 8.17.2
+
+Also see [Breaking changes in 8.17](migrating-8.17.html#breaking-changes-8.17).
+
+### Bug fixes
+
+Authentication
+
+* Fix NPE on disabled API auth key cache [#120483](https://github.com/elastic/elasticsearch/pull/120483)
+
+Data streams
+
+* Map `scope.name` as a dimension [#120590](https://github.com/elastic/elasticsearch/pull/120590)
+
+ES|QL
+
+* Use `field_caps` native nested fields filtering [#117201](https://github.com/elastic/elasticsearch/pull/117201) (issue: [#117054](https://github.com/elastic/elasticsearch/issues/117054))
+
+Machine Learning
+
+* Fix infer on and elasticsearch service endpoint created with a deployment id [#121428](https://github.com/elastic/elasticsearch/pull/121428)
+
+* Fix inference update API calls with `task_type` in body or `deployment_id` defined [#121231](https://github.com/elastic/elasticsearch/pull/121231)
+
+* Skip Usage stats update when ML is disabled [#121559](https://github.com/elastic/elasticsearch/pull/121559) (issue: [#121532](https://github.com/elastic/elasticsearch/issues/121532))
+
+Mapping
+
+* Fix synthetic source issue with deeply nested ignored source fields [#121715](https://github.com/elastic/elasticsearch/pull/121715)
+
+* Lower `_source.mode` mapping attribute deprecation issue level [#120059](https://github.com/elastic/elasticsearch/pull/120059)
+
+Ranking
+
+* Fix LTR rescorer throws *local model reference is null* on multi-shards index when explained is enabled [#120717](https://github.com/elastic/elasticsearch/pull/120717) (issue: [#120739](https://github.com/elastic/elasticsearch/issues/120739))
+
+* LTR sometines throw `NullPointerException:` Cannot read field "approximation" because "top" is null [#120809](https://github.com/elastic/elasticsearch/pull/120809)
+
+* Normalize negative scores for `text_similarity_reranker` retriever [#120930](https://github.com/elastic/elasticsearch/pull/120930) (issue: [#120201](https://github.com/elastic/elasticsearch/issues/120201))
+
+* Update Text Similarity Reranker to Properly Handle Aliases [#120062](https://github.com/elastic/elasticsearch/pull/120062) (issue: [#119617](https://github.com/elastic/elasticsearch/issues/119617))
+
+Search
+
+* Add back `keep_alive` to `async_search.submit` rest-api-spec [#120781](https://github.com/elastic/elasticsearch/pull/120781)
+
+* Fix NPE caused by race condition in async search when minimise round trips is true [#117504](https://github.com/elastic/elasticsearch/pull/117504)
+
+* Fix potential file leak in ES816BinaryQuantizedVectorsWriter [#120014](https://github.com/elastic/elasticsearch/pull/120014) (issue: [#119981](https://github.com/elastic/elasticsearch/issues/119981))
+
+* Use approximation to advance matched queries [#120133](https://github.com/elastic/elasticsearch/pull/120133) (issue: [#120130](https://github.com/elastic/elasticsearch/issues/120130))
+
+Snapshot/Restore
+
+* Cheaper snapshot-related `toString()` impls [#121283](https://github.com/elastic/elasticsearch/pull/121283)
+
+* Issue S3 web identity token refresh call with sufficient permissions [#119748](https://github.com/elastic/elasticsearch/pull/119748) (issue: [#119747](https://github.com/elastic/elasticsearch/issues/119747))
+
+### Enhancements
+
+Ingest Node
+
+* Improve memory aspects of enrich cache [#120256](https://github.com/elastic/elasticsearch/pull/120256) (issues: [#96050](https://github.com/elastic/elasticsearch/issues/96050), [#120021](https://github.com/elastic/elasticsearch/issues/120021))
+
+### Known issues
+
+* `VALUES` aggregate function can run for a long, long time when collecting many, many groups. Hundreds of thousands of groups can run on one thread for many minutes and millions of groups run for days. It is O(n2) with the number of groups. These will not respond to the tasks cancellation API the whole time. Fixed by [#123073](https://github.com/elastic/elasticsearch/pull/123073) and available in 8.16.5, 8.17.3, 8.18.0, and all releases after that.
+
+* Some valid queries using an `ENRICH` command can fail when a match field is used that is absent from some indices or shards, either with a 500 status code due to `NullPointerException` or `ClassCastException` or with a 400 status code and `IllegalArgumentException`. This is fixed in [#126187](https://github.com/elastic/elasticsearch/pull/126187).

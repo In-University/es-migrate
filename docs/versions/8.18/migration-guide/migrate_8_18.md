@@ -1,0 +1,121 @@
+## Migrating to 8.18
+
+This section discusses the changes that you need to be aware of when migrating
+your application to Elasticsearch 8.18.
+
+See also [release-highlights](#release-highlights) and [es-release-notes](#es-release-notes).
+
+coming::[8.18.0]
+
+### Breaking changes
+
+The following changes in Elasticsearch 8.18 might affect your applications
+and prevent them from operating normally.
+Before upgrading to 8.18, review these changes and take the described steps
+to mitigate the impact.
+
+#### Analysis changes
+
+.Change Semantic Text To Act Like A Normal Text Field
+[%collapsible]
+====
+*Details* +
+The previous semantic_text format used a complex subfield structure in _source to store the embeddings. This complicated interactions/integrations with semantic_text fields and _source in general. This new semantic_text format treats it as a normal text field, where the field's value in _source is the value assigned by the user.
+
+*Impact* +
+Users who parsed the subfield structure of the previous semantic_text format in _source will need to update their parsing logic. The new format does not directly expose the chunks and embeddings generated from the input text. The new format will be applied to all new indices, any existing indices will continue to use the previous format.
+====
+
+#### Cluster and node setting changes
+
+.Drop `TLS_RSA` cipher support for JDK 24
+[%collapsible]
+====
+*Details* +
+This change removes `TLS_RSA` ciphers from the list of default supported ciphers, for Elasticsearch deployments running on JDK 24.
+
+*Impact* +
+The dropped ciphers are `TLS_RSA_WITH_AES_256_GCM_SHA384`, `TLS_RSA_WITH_AES_128_GCM_SHA256`, `TLS_RSA_WITH_AES_256_CBC_SHA256`, `TLS_RSA_WITH_AES_128_CBC_SHA256`, `TLS_RSA_WITH_AES_256_CBC_SHA`, and `TLS_RSA_WITH_AES_128_CBC_SHA`. TLS connections to Elasticsearch using these ciphers will no longer work. Please configure your clients to use one of supported cipher suites.
+====
+
+#### Packaging changes
+
+.Disable machine learning on macOS x86_64
+[%collapsible]
+====
+*Details* +
+The machine learning plugin is permanently disabled on macOS x86_64. For the last three years Apple has been selling hardware based on the arm64 architecture, and support will increasingly focus on this architecture in the future. Changes to upstream dependencies of Elastic's machine learning functionality have made it unviable for Elastic to continue to build machine learning on macOS x86_64.
+
+*Impact* +
+To continue to use machine learning functionality on macOS please switch to an arm64 machine (Apple silicon). Alternatively, it will still be possible to run Elasticsearch with machine learning enabled in a Docker container on macOS x86_64.
+====
+
+#### REST API changes
+
+.Set allow_partial_search_results=true by default
+[%collapsible]
+====
+*Details* +
+Before this change, in case of shard failures, EQL queries always returned an error. With this change, they will keep running and will return partial results.
+
+*Impact* +
+EQL queries that would previously fail due to shard failures, will now succeed and return partial results. The previous defaults can be restored by setting `xpack.eql.default_allow_partial_results` cluster setting to `false` or setting with `allow_partial_search_results` to `false` in the query request.
+====
+
+#### ES|QL changes
+
+.Limit the scope of the skip_unavailable setting for remote clusters
+[%collapsible]
+====
+*Details* +
+Before this change, ES|QL would honor the skip_unavailable setting for nonmatching indices errors at planning time, meaning that when a query with a concrete (non-wildcarded) index was issued to a cluster where skip_unavailable=true, the index would be skipped, allowing the query to proceed on any other specified clusters rather than returning an error.
+
+*Impact* +
+Remote clusters, regardless of their skip_unavailable setting, will now use the same logic as the local cluster for index expression analysis at plan time. As a result, any missing concrete index in your index expression will return an error rather than partial results.
+====
+
+### Deprecations
+
+The following functionality has been deprecated in Elasticsearch 8.18
+and will be removed in a future version.
+While this won't have an immediate impact on your applications,
+we strongly encourage you to take the described steps to update your code
+after upgrading to 8.18.
+
+To find out if you are using any deprecated functionality,
+enable [deprecation logging](#deprecation-logging).
+
+#### Index setting deprecations
+
+.Increase the frozen indices deprecation level to `CRITICAL`
+[%collapsible]
+====
+*Details* +
+The migration deprecations API previously returned a warning on frozen indices. Support for reading frozen indices will be removed in 9.0, so in 8.18 this has been made a critical issue.
+
+*Impact* +
+Users are required to unfreeze any frozen indices before upgrading to 9.x. (N.B. It was impossible to freeze indices in 8.x, so this only applies to 7.x indices which have not been reindexed.)
+====
+
+#### REST API deprecations
+
+.Deprecate ability to connect to nodes of versions 8.17 and earlier
+[%collapsible]
+====
+*Details* +
+Versions 9.0.0 and later of Elasticsearch will not support communication with nodes of versions earlier than 8.18.0, so the ability to connect to nodes of earlier versions is deprecated in this version. This applies both to communication within a cluster and communication across clusters (e.g. for [{ccs}](#modules-cross-cluster-search) or [{ccr}](#xpack-ccr)).
+Elasticsearch will report in its [deprecation logging](#deprecation-logging) each time it opens a connection to a node that will not be supported from version 9.0.0 onwards. You must upgrade all your clusters to version 8.18.0 or later before upgrading any of your clusters to 9.0.0 or later.
+
+*Impact* +
+Upgrade all of your clusters to at least 8.18.0 before upgrading any of them to 9.0.0 or later.
+====
+
+.V_7 deprecation logging set to critical
+[%collapsible]
+====
+*Details* +
+This changes the V_7 API deprecation logging level to CRITICAL.
+
+*Impact* +
+Any usage of deprecated V_7 API features will now be logged at the CRITICAL level. This does not change functionality.
+====

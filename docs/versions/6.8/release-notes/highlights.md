@@ -1,0 +1,25 @@
+# Release Highlights
+
+[partintro]
+--
+This section summarizes the most important changes in each release. For the 
+full list, see [es-release-notes](#es-release-notes) and [breaking-changes](#breaking-changes). 
+
+* [release-highlights-6.8.13](#release-highlights-6.8.13)
+* [release-highlights-6.8.11](#release-highlights-6.8.11)
+* [release-highlights-6.8.0](#release-highlights-6.8.0)
+* [release-highlights-6.7.0](#release-highlights-6.7.0)
+* [release-highlights-6.6.0](#release-highlights-6.6.0)
+* [release-highlights-6.5.0](#release-highlights-6.5.0)
+* [release-highlights-6.4.0](#release-highlights-6.4.0)
+* [release-highlights-6.3.0](#release-highlights-6.3.0)
+
+--
+include::highlights-6.8.13.asciidoc[]
+include::highlights-6.8.11.asciidoc[]
+include::highlights-6.8.0.asciidoc[]
+include::highlights-6.7.0.asciidoc[]
+include::highlights-6.6.0.asciidoc[]
+include::highlights-6.5.0.asciidoc[]
+include::highlights-6.4.0.asciidoc[]
+include::highlights-6.3.0.asciidoc[]

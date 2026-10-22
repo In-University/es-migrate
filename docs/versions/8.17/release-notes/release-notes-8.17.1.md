@@ -1,0 +1,103 @@
+**IMPORTANT**: This documentation is no longer updated. Refer to [Elastic's version policy](https://www.elastic.co/support/eol) and the [latest documentation](https://www.elastic.co/docs).
+
+## Elasticsearch version 8.17.1
+
+Also see [Breaking changes in 8.17](migrating-8.17.html#breaking-changes-8.17).
+
+### Bug fixes
+
+Aggregations
+
+* Fix moving function linear weighted avg [#118435](https://github.com/elastic/elasticsearch/pull/118435) (issue: [#113751](https://github.com/elastic/elasticsearch/issues/113751))
+
+CCS
+
+* Resolve/cluster should mark remotes as not connected when a security exception is thrown [#119793](https://github.com/elastic/elasticsearch/pull/119793)
+
+Data streams
+
+* Add missing traces ilm policy for OTel traces data streams [#119449](https://github.com/elastic/elasticsearch/pull/119449)
+
+Downsampling
+
+* Handle `index.mapping.ignore_malformed` in downsampling [#119134](https://github.com/elastic/elasticsearch/pull/119134) (issue: [#119075](https://github.com/elastic/elasticsearch/issues/119075))
+
+* Support flattened field with downsampling [#118816](https://github.com/elastic/elasticsearch/pull/118816) (issue: [#116319](https://github.com/elastic/elasticsearch/issues/116319))
+
+ES|QL
+
+* Allow DATE_PARSE to read the timezones [#118603](https://github.com/elastic/elasticsearch/pull/118603) (issue: [#117680](https://github.com/elastic/elasticsearch/issues/117680))
+
+* Fix ESQL async get while task is being cancelled [#119897](https://github.com/elastic/elasticsearch/pull/119897)
+
+* Fix RLIKE folding with (unsupported) case insensitive pattern [#118454](https://github.com/elastic/elasticsearch/pull/118454)
+
+ILM+SLM
+
+* Add missing timeouts to rest-api-spec ILM APIs [#118837](https://github.com/elastic/elasticsearch/pull/118837)
+
+* Add missing timeouts to rest-api-spec SLM APIs [#118958](https://github.com/elastic/elasticsearch/pull/118958)
+
+Infra/Node Lifecycle
+
+* Add missing timeouts to rest-api-spec shutdown APIs [#118921](https://github.com/elastic/elasticsearch/pull/118921)
+
+Infra/REST API
+
+* Add missing parameter to `xpack.info` rest-api-spec [#118954](https://github.com/elastic/elasticsearch/pull/118954)
+
+Ingest Node
+
+* Add missing timeouts to rest-api-spec ingest APIs [#118844](https://github.com/elastic/elasticsearch/pull/118844)
+
+* Expose BwC enrich cache setting in plugin [#119131](https://github.com/elastic/elasticsearch/pull/119131)
+
+* Fixing `GetDatabaseConfigurationAction` response serialization [#119233](https://github.com/elastic/elasticsearch/pull/119233)
+
+License
+
+* Remove unsupported timeout from rest-api-spec license API [#118919](https://github.com/elastic/elasticsearch/pull/118919)
+
+Machine Learning
+
+* Fix loss of context in the inference API for streaming APIs [#118999](https://github.com/elastic/elasticsearch/pull/118999) (issue: [#119000](https://github.com/elastic/elasticsearch/issues/119000))
+
+* Fix spike detection for short spikes at the tail of the data [#119637](https://github.com/elastic/elasticsearch/pull/119637)
+
+* Fix timeout ingesting an empty string into a `semantic_text` field [#117840](https://github.com/elastic/elasticsearch/pull/117840)
+
+* [Inference API] Fix bug checking for e5 or reranker default IDs [#119797](https://github.com/elastic/elasticsearch/pull/119797)
+
+Search
+
+* ESQL: `connect_transport_exception` should be thrown instead of `verification_exception` when ENRICH-ing if remote is disconnected [#119750](https://github.com/elastic/elasticsearch/pull/119750)
+
+* Fix: do not let `_resolve/cluster` hang if remote is unresponsive [#119516](https://github.com/elastic/elasticsearch/pull/119516)
+
+* Handle exceptions in query phase can match [#117469](https://github.com/elastic/elasticsearch/pull/117469) (issue: [#104994](https://github.com/elastic/elasticsearch/issues/104994))
+
+### Enhancements
+
+Authorization
+
+* Improve handling of nested fields in index reader wrappers [#118757](https://github.com/elastic/elasticsearch/pull/118757)
+
+Data streams
+
+* Add mapping for `event_name` for OTel logs [#119495](https://github.com/elastic/elasticsearch/pull/119495)
+
+Monitoring
+
+* Addition of `tier_preference`, `creation_date` and `version` fields in Elasticsearch monitoring template [#117851](https://github.com/elastic/elasticsearch/pull/117851)
+
+### New features
+
+Logs
+
+* Make logsdb general available [#118559](https://github.com/elastic/elasticsearch/pull/118559)
+
+### Known issues
+
+ES|QL
+
+* Some valid queries using an `ENRICH` command can fail when a match field is used that is absent from some indices or shards, either with a 500 status code due to `NullPointerException` or `ClassCastException` or with a 400 status code and `IllegalArgumentException`. This is fixed in [#126187](https://github.com/elastic/elasticsearch/pull/126187).

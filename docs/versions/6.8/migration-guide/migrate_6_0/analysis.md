@@ -1,0 +1,56 @@
+[float]
+### Analysis changes
+
+[float]
+#### Synonym Token Filter
+
+In 6.0, Synonym Token Filter tokenizes synonyms with whatever
+tokenizer and token filters appear before it in the chain.
+
+The `tokenizer` and `ignore_case` parameters are deprecated
+and will be ignored when used in new indices.  These parameters
+will continue to function as before when used in indices
+created in 5.x.
+
+[float]
+#### Limiting the length of an analyzed text during highlighting
+
+Highlighting a text that was indexed without offsets or term vectors,
+requires analysis of this text in memory real time during the search request.
+For large texts this analysis may take substantial amount of time and memory.
+To protect against this, the maximum number of characters that to be analyzed will be
+limited to 1000000 in the next major Elastic version. For this version, by default the limit
+is not set. A deprecation warning will be issued when an analyzed text exceeds 1000000.
+ The limit can be set for a particular index with the index setting
+`index.highlight.max_analyzed_offset`.
+
+[float]
+#### `standard` filter has been deprecated
+The `standard` token filter has been deprecated because it doesn't change anything in
+the stream. It will be removed in the next major version.
+
+[float]
+#### Deprecated standard_html_strip analyzer
+
+The `standard_html_strip` analyzer has been deprecated, and should be replaced
+with a combination of the `standard` tokenizer and `html_strip` char_filter.
+Indexes created using this analyzer will still be readable in elasticsearch 7.0,
+but it will not be possible to create new indexes using it.
+
+[float]
+#### Limit to the difference between max_size and min_size in NGramTokenFilter and NGramTokenizer
+
+To safeguard against creating too many index terms, the difference between
+max_ngram and min_ngram in NGramTokenFilter and NGramTokenizer has been
+limited to 1. This default limit can be changed with the index setting
+index.max_ngram_diff. Note that if the limit is exceeded a deprecation
+warning is logged.
+
+[float]
+#### Limit to the difference between max_size and min_size in ShingleTokenFilter
+
+To safeguard against creating too many tokens, the difference between
+max_shingle_size and min_shingle_size in ShingleTokenFilter has been
+limited to 3. This default limit can be changed with the index setting
+index.max_shingle_diff. Note that if the limit is exceeded a deprecation
+warning will be logged.

@@ -1,0 +1,17 @@
+**IMPORTANT**: This documentation is no longer updated. Refer to [Elastic's version policy](https://www.elastic.co/support/eol) and the [latest documentation](https://www.elastic.co/docs).
+
+## Breaking changes in 6.1
+
+This section discusses the changes that you need to be aware of when migrating
+your application to Elasticsearch 6.1.
+
+### Bootstrap checks now apply to link-local addresses
+
+Previously when Elasticsearch was bound to localhost, Elasticsearch would bind
+to any address on the loopback device. This included link-local addresses on the
+loopback device such as `fe80::1%lo0` on macOS. Starting in 6.1.2, Elasticsearch
+will now only bind to loopback addresses on the loopback device. Because of the
+previous behavior, Elasticsearch would skip the bootstrap checks if bound to a
+link-local address. Now that Elasticsearch no longer binds to such addresses
+when binding to localhost, the bootstrap checks now apply to link-local
+addresses.

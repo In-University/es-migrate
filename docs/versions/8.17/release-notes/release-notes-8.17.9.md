@@ -1,0 +1,29 @@
+**IMPORTANT**: This documentation is no longer updated. Refer to [Elastic's version policy](https://www.elastic.co/support/eol) and the [latest documentation](https://www.elastic.co/docs).
+
+## Elasticsearch version 8.17.9
+
+Also see [Breaking changes in 8.17](migrating-8.17.html#breaking-changes-8.17).
+
+### Bug fixes
+
+Aggregations
+
+* Aggs: Add cancellation checks to `FilterByFilter` aggregator [#130452](https://github.com/elastic/elasticsearch/pull/130452)
+
+ES|QL
+
+* Avoid O(N^2) in VALUES with ordinals grouping [#130576](https://github.com/elastic/elasticsearch/pull/130576)
+
+* Avoid dropping aggregate groupings in local plans [#129370](https://github.com/elastic/elasticsearch/pull/129370) (issues: [#129811](https://github.com/elastic/elasticsearch/issues/129811), [#128054](https://github.com/elastic/elasticsearch/issues/128054))
+
+* Fix `BytesRef2BlockHash` [#130705](https://github.com/elastic/elasticsearch/pull/130705)
+
+Search
+
+* Fix msearch request parsing when index expression is null [#130776](https://github.com/elastic/elasticsearch/pull/130776) (issue: [#129631](https://github.com/elastic/elasticsearch/issues/129631))
+
+### Upgrades
+
+Packaging
+
+* Update default docker base image to Ubuntu 24.04 [#130277](https://github.com/elastic/elasticsearch/pull/130277)

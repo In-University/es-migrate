@@ -1,0 +1,17 @@
+### Suggesters changes
+
+//NOTE: The notable-breaking-changes tagged regions are re-used in the
+//Installation and Upgrade Guide
+
+//tag::notable-breaking-changes[]
+
+// end::notable-breaking-changes[]
+
+#### Registration of suggesters in plugins has changed
+
+Plugins must now explicitly indicate the type of suggestion that they produce.
+
+#### Phrase suggester now multiples alpha
+Previously, the laplace smoothing used by the phrase suggester added `alpha`,
+when it should instead multiply.  This behavior has been changed and will
+affect suggester scores.

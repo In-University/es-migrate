@@ -1,0 +1,28 @@
+[float]
+### Cluster changes
+
+[float]
+#### Cluster name no longer allowed in path.data
+
+Previously the cluster name could be used in the `path.data` setting with a
+warning. This is now no longer allowed. For instance, in the previous version
+this was valid:
+
+[source,sh]
+--------------------------------------------------
+# Assuming path.data is /tmp/mydata
+# No longer supported:
+$ tree /tmp/mydata
+/tmp/mydata
+├── <cluster_name>
+│   └── nodes
+│       └── 0
+│           └── <etc>
+
+# Should be changed to:
+$ tree /tmp/mydata
+/tmp/mydata
+├── nodes
+│   └── 0
+│       └── <etc>
+--------------------------------------------------

@@ -1,0 +1,24 @@
+### Terminate processor
+
+Terminates the current ingest pipeline, causing no further processors to be run.
+This will normally be executed conditionally, using the `if` option.
+
+If this pipeline is being called from another pipeline, the calling pipeline is *not* terminated.
+
+.Terminate Options
+[options="header"]
+|======
+| Name        | Required | Default | Description
+include::common-options.asciidoc[]
+|======
+
+[source,js]
+--------------------------------------------------
+{
+  "description" : "terminates the current pipeline if the error field is present",
+  "terminate": {
+    "if": "ctx.error != null"
+  }
+}
+--------------------------------------------------
+// NOTCONSOLE

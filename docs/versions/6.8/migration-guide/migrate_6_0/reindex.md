@@ -1,0 +1,7 @@
+[float]
+### Reindex changes
+
+[float]
+#### `size` parameter
+
+The `size` parameter can no longer be explicitly set to `-1`. If all documents are required then the `size` parameter should not be set.

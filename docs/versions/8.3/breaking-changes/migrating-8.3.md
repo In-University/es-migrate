@@ -1,0 +1,47 @@
+**IMPORTANT**: This documentation is no longer updated. Refer to [Elastic's version policy](https://www.elastic.co/support/eol) and the [latest documentation](https://www.elastic.co/docs).
+
+## Migrating to 8.3
+
+This section discusses the changes that you need to be aware of when migrating
+your application to Elasticsearch 8.3.
+
+See also [*What’s new in 8.17*](release-highlights.html) and [Release notes](es-release-notes.html).
+
+### Breaking changes
+
+There are no breaking changes in Elasticsearch 8.3.
+
+### Deprecations
+
+The following functionality has been deprecated in Elasticsearch 8.3
+and will be removed in a future version.
+While this won’t have an immediate impact on your applications,
+we strongly encourage you take the described steps to update your code
+after upgrading to 8.3.
+
+To find out if you are using any deprecated functionality,
+enable [deprecation logging](logging.html#deprecation-logging).
+
+#### Cluster and node setting deprecations
+
+Configuring a bind DN in an LDAP or Active Directory (AD) realm without a corresponding bind password is deprecated
+
+**Details**
+
+For LDAP or AD authentication realms, setting a bind DN (via the
+`xpack.security.authc.realms.ldap.*.bind_dn` realm setting) without a
+bind password is a misconfiguration that may prevent successful
+authentication to the node. In the next major release, nodes will fail
+to start if a bind DN is specified without a password.
+
+**Impact**
+
+If you have a bind DN configured for an LDAP or AD authentication
+realm, set a bind password for [LDAP](/guide/en/elasticsearch/reference/8.17/ldap-realm.html#ldap-realm-configuration)
+or [Active Directory](/guide/en/elasticsearch/reference/8.17/active-directory-realm.html#ad-realm-configuration).
+Configuring a bind DN without a password generates a warning in the
+deprecation logs.
+
+**Note:** This deprecation only applies if your current LDAP or AD
+configuration specifies a bind DN without a password. This scenario is
+unlikely, but might impact a small subset of users.

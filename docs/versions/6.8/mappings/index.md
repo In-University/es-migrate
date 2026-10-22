@@ -1,0 +1,4 @@
+### `index`
+
+The `index` option controls whether field values are indexed. It accepts `true`
+or `false` and defaults to `true`. Fields that are not indexed are not queryable.

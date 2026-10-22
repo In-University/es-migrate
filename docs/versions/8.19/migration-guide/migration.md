@@ -1,0 +1,26 @@
+[role="xpack"]
+## Migration APIs
+
+.New API reference
+[sidebar]
+--
+For the most up-to-date API details, refer to {api-es}/group/endpoint-migration[Migration APIs].
+--
+
+The migration APIs power Kibana's **Upgrade Assistant** feature.
+
+include::apis/shared-migration-apis-tip.asciidoc[]
+
+* [migration-api-deprecation](#migration-api-deprecation)
+* [feature-migration-api](#feature-migration-api)
+* [data-stream-reindex-api](#data-stream-reindex-api)
+* [data-stream-reindex-status-api](#data-stream-reindex-status-api)
+* [data-stream-reindex-cancel-api](#data-stream-reindex-cancel-api)
+* [indices-create-index-from-source](#indices-create-index-from-source)
+
+include::apis/deprecation.asciidoc[]
+include::apis/feature-migration.asciidoc[]
+include::apis/data-stream-reindex.asciidoc[]
+include::apis/data-stream-reindex-status.asciidoc[]
+include::apis/data-stream-reindex-cancel.asciidoc[]
+include::apis/create-index-from-source.asciidoc[]
