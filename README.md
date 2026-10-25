@@ -366,3 +366,19 @@ Key Reference Documents:
 - [`docs/versions/INGEST_ATTACHMENT_SCHEMA_EVOLUTION.md`](docs/versions/INGEST_ATTACHMENT_SCHEMA_EVOLUTION.md): Complete verbatim property catalog (all 28 metadata fields extracted in 8+/9+ vs 8 fields in 6/7) and strict dynamic mapping failure prevention.
 - [`docs/versions/DYNAMIC_MAPPING_AND_STRICT_GUIDE.md`](docs/versions/DYNAMIC_MAPPING_AND_STRICT_GUIDE.md): Schema rules, removal of types, strict mapping, and date format migration guide.
 - [`docs/MAPPING-DIFFERENCES.md`](docs/MAPPING-DIFFERENCES.md): Summary of ES6 vs ES9 mapping differences.
+
+```bash
+# Xóa bản Go cài thủ công trước đó (nếu có)
+sudo rm -rf /usr/local/go
+
+# Tải và cài Go 1.26.2
+wget https://go.dev/dl/go1.26.2.linux-amd64.tar.gz
+sudo tar -C /usr/local -xzf go1.26.2.linux-amd64.tar.gz
+
+# Thêm Go vào PATH
+echo 'export PATH=$PATH:/usr/local/go/bin' >> ~/.profile
+source ~/.profile
+
+# Kiểm tra phiên bản
+go version
+```
