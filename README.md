@@ -1,5 +1,7 @@
 # es-migrate — ES6 → ES9 remote-reindex benchmark on GCP
 
+gcloud compute ssh --zone "us-central1-a" "instance-20261030-142439" --project "devhub-464904" --command 'echo "cluster.initial_master_nodes: [\"\${HOST_1}\", \"\${HOST_2}\", \"\${HOST_3}\"]" | tee -a elasticsearch.yml'
+
 Stands up two Elasticsearch VMs on GCP and migrates an 8-million-document,
 40-field index from **Elasticsearch 6.8.23** into **Elasticsearch 9.x** using
 native **reindex-from-remote**.
